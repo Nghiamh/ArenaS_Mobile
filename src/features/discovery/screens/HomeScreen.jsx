@@ -2,6 +2,8 @@ import { ScrollView, Text, TextInput, View, TouchableOpacity, Alert } from "reac
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
+import { useDispatch } from "react-redux";
+import { logout } from "../../auth/authSlice";
 
 const sports = [
     { name: "Bóng đá", sessions: "24 sân", tone: "bg-[#1A4D63]", icon: "soccer" },
@@ -32,6 +34,7 @@ export default function HomeScreen() {
     const isDark = colorScheme === "dark";
     const iconColor = isDark ? "#FFFFFF" : "#000000";
     const navigation = useNavigation();
+    const dispatch = useDispatch();
 
     return (
         <ScrollView className="flex-1 bg-appBg" contentContainerClassName="px-4 pb-10 pt-12">
@@ -46,20 +49,20 @@ export default function HomeScreen() {
 
                 <View className="flex-row items-center gap-2">
                     <TouchableOpacity 
+                        onPress={() => dispatch(logout())}
+                        className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
+                    >
+                        <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
                         onPress={toggleColorScheme}
-                        className="h-11 w-11 items-center justify-center rounded-full bg-appSurface border border-appText/10"
+                        className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
                     >
                         <MaterialCommunityIcons 
                             name={isDark ? "weather-sunny" : "weather-night"} 
-                            size={20} 
+                            size={18} 
                             color={iconColor} 
                         />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        onPress={() => Alert.alert("Thông báo", "Bạn không có thông báo mới.")}
-                        className="h-11 w-11 items-center justify-center rounded-full bg-appSurface border border-appText/10"
-                    >
-                        <Ionicons name="notifications-outline" size={20} color={iconColor} />
                     </TouchableOpacity>
                 </View>
             </View>
