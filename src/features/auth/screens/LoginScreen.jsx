@@ -32,13 +32,13 @@ export default function LoginScreen() {
 
             <ScrollView className="flex-1" contentContainerClassName="flex-grow px-5 pb-12 justify-center" showsVerticalScrollIndicator={false}>
                 <View className="items-center mb-8">
-                    <Image 
+                    <Image
                         source={require('../../../../assets/Img/logo.JPG.jpg')}
                         style={{ width: 80, height: 80, borderRadius: 40 }}
                         resizeMode="cover"
                     />
                     <Text className="mt-4 text-3xl font-black text-[#007F3F]">ArenaS</Text>
-                    <Text className="mt-2 text-sm text-[#475569]">Sẵn sàng cho trận đấu tiếp theo?</Text>
+                    <Text className="mt-2 text-sm text-[#475569]">Đặt Sân Nhanh Chóng - Tiện Lợi</Text>
                 </View>
 
                 <View className="rounded-3xl bg-white p-5 shadow-sm shadow-black/5">
