@@ -1,4 +1,4 @@
-import { ScrollView, Text, TextInput, View, TouchableOpacity } from "react-native";
+import { ScrollView, Text, TextInput, View, TouchableOpacity, Alert } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
@@ -55,9 +55,12 @@ export default function HomeScreen() {
                             color={iconColor} 
                         />
                     </TouchableOpacity>
-                    <View className="h-11 w-11 items-center justify-center rounded-full bg-appSurface border border-appText/10">
+                    <TouchableOpacity 
+                        onPress={() => Alert.alert("Thông báo", "Bạn không có thông báo mới.")}
+                        className="h-11 w-11 items-center justify-center rounded-full bg-appSurface border border-appText/10"
+                    >
                         <Ionicons name="notifications-outline" size={20} color={iconColor} />
-                    </View>
+                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -70,42 +73,55 @@ export default function HomeScreen() {
                         className="flex-1 text-base text-appText"
                     />
                 </View>
-                <View className="rounded-2xl bg-emerald-700 px-4 py-3">
+                <TouchableOpacity 
+                    onPress={() => Alert.alert("Bộ lọc", "Tính năng lọc nâng cao đang phát triển.")}
+                    className="rounded-2xl bg-emerald-700 px-4 py-3"
+                >
                     <Text className="font-semibold text-white">Lọc</Text>
-                </View>
+                </TouchableOpacity>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-5" contentContainerClassName="gap-3 pr-4">
                 {['Tất cả', 'Gần đây', 'Nổi bật', 'Mới'].map((item, index) => (
-                    <View
+                    <TouchableOpacity
                         key={item}
+                        onPress={() => Alert.alert("Danh mục", `Đã chọn: ${item}`)}
                         className={`rounded-full px-4 py-2 ${index === 0 ? 'bg-emerald-700' : 'bg-appSurface border border-appText/10'}`}
                     >
                         <Text className={`text-sm font-semibold ${index === 0 ? 'text-white' : 'text-appText/80'}`}>{item}</Text>
-                    </View>
+                    </TouchableOpacity>
                 ))}
             </ScrollView>
 
             <View className="mt-7 flex-row items-center justify-between">
                 <Text className="text-xl font-bold text-appText">Môn thể thao</Text>
-                <Text className="text-sm font-semibold text-emerald-300">Xem tất cả ›</Text>
+                <TouchableOpacity onPress={() => navigation.navigate("Sân đấu")}>
+                    <Text className="text-sm font-semibold text-emerald-300">Xem tất cả ›</Text>
+                </TouchableOpacity>
             </View>
 
             <View className="mt-4 flex-row flex-wrap justify-between gap-3">
                 {sports.map((item) => (
-                    <View key={item.name} className={`w-[48%] overflow-hidden rounded-2xl p-3 shadow-lg shadow-black/20 ${item.tone}`}>
+                    <TouchableOpacity 
+                        key={item.name} 
+                        onPress={() => navigation.navigate("Sân đấu")}
+                        activeOpacity={0.8}
+                        className={`w-[48%] overflow-hidden rounded-2xl p-3 shadow-lg shadow-black/20 ${item.tone}`}
+                    >
                         <View className="mb-10 h-8 w-8 items-center justify-center rounded-full bg-white/95">
                             <MaterialCommunityIcons name={item.icon} size={20} color="#000000" />
                         </View>
                         <Text className="text-lg font-bold text-white">{item.name}</Text>
                         <Text className="mt-1 text-sm text-white/85">{item.sessions}</Text>
-                    </View>
+                    </TouchableOpacity>
                 ))}
             </View>
 
             <View className="mt-8 flex-row items-center justify-between">
                 <Text className="text-xl font-bold text-appText">Sân gần bạn</Text>
-                <Text className="text-sm font-semibold text-emerald-300">Xem tất cả</Text>
+                <TouchableOpacity onPress={() => navigation.navigate("Sân đấu")}>
+                    <Text className="text-sm font-semibold text-emerald-300">Xem tất cả</Text>
+                </TouchableOpacity>
             </View>
 
             <View className="mt-4 gap-4">
