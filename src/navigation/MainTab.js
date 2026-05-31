@@ -11,6 +11,7 @@ export default function MainTab() {
     return (
         <Tab.Navigator
             screenOptions={{
+                headerShown: false,
                 headerStyle: { backgroundColor: "#08101F" },
                 headerTintColor: "#F5F7FA",
                 tabBarStyle: { backgroundColor: "#111827", borderTopColor: "#1F2937" },
@@ -18,10 +19,10 @@ export default function MainTab() {
                 tabBarInactiveTintColor: "#94A3B8",
             }}
         >
-            <Tab.Screen name="Discover" component={HomeScreen} />
-            <Tab.Screen name="Search" component={SearchResultScreen} />
-            <Tab.Screen name="Booking" component={CourtDetailScreen} />
-            <Tab.Screen name="Manager" component={OwnerDashboardScreen} />
+            <Tab.Screen name="Trang chủ" component={HomeScreen} options={{ tabBarLabel: "Trang chủ" }} />
+            <Tab.Screen name="Sân đấu" component={SearchResultScreen} options={{ tabBarLabel: "Sân đấu" }} />
+            <Tab.Screen name="Đặt lịch" component={CourtDetailScreen} options={{ tabBarLabel: "Đặt lịch" }} />
+            <Tab.Screen name="Hồ sơ" component={OwnerDashboardScreen} options={{ tabBarLabel: "Hồ sơ" }} />
         </Tab.Navigator>
     );
 }
