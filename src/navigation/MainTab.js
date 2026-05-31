@@ -1,4 +1,6 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+import { useColorScheme } from "nativewind";
 
 import HomeScreen from "../features/discovery/screens/HomeScreen";
 import SearchResultScreen from "../features/discovery/screens/SearchResultScreen";
@@ -8,16 +10,37 @@ import OwnerDashboardScreen from "../features/manager/screens/OwnerDashboardScre
 const Tab = createBottomTabNavigator();
 
 export default function MainTab() {
+    const { colorScheme } = useColorScheme();
+    const isDark = colorScheme === "dark";
+
     return (
         <Tab.Navigator
-            screenOptions={{
+            screenOptions={({ route }) => ({
                 headerShown: false,
-                headerStyle: { backgroundColor: "#08101F" },
-                headerTintColor: "#F5F7FA",
-                tabBarStyle: { backgroundColor: "#111827", borderTopColor: "#1F2937" },
-                tabBarActiveTintColor: "#FFB703",
-                tabBarInactiveTintColor: "#94A3B8",
-            }}
+                headerStyle: { backgroundColor: isDark ? "#08101F" : "#F5F7FA" },
+                headerTintColor: isDark ? "#F5F7FA" : "#0F172A",
+                tabBarStyle: { 
+                    backgroundColor: isDark ? "#111827" : "#FFFFFF", 
+                    borderTopColor: isDark ? "#1F2937" : "#E2E8F0" 
+                },
+                tabBarActiveTintColor: isDark ? "#FFFFFF" : "#000000",
+                tabBarInactiveTintColor: isDark ? "#94A3B8" : "#64748B",
+                tabBarIcon: ({ focused, color, size }) => {
+                    let iconName;
+
+                    if (route.name === "Trang chủ") {
+                        iconName = focused ? "home" : "home-outline";
+                    } else if (route.name === "Sân đấu") {
+                        iconName = focused ? "search" : "search-outline";
+                    } else if (route.name === "Đặt lịch") {
+                        iconName = focused ? "calendar" : "calendar-outline";
+                    } else if (route.name === "Hồ sơ") {
+                        iconName = focused ? "person" : "person-outline";
+                    }
+
+                    return <Ionicons name={iconName} size={size} color={color} />;
+                },
+            })}
         >
             <Tab.Screen name="Trang chủ" component={HomeScreen} options={{ tabBarLabel: "Trang chủ" }} />
             <Tab.Screen name="Sân đấu" component={SearchResultScreen} options={{ tabBarLabel: "Sân đấu" }} />
