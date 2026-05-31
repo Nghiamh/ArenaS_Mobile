@@ -5,7 +5,7 @@ import { useColorScheme } from "nativewind";
 import HomeScreen from "../features/discovery/screens/HomeScreen";
 import SearchResultScreen from "../features/discovery/screens/SearchResultScreen";
 import CourtDetailScreen from "../features/booking/screens/CourtDetailScreen";
-import OwnerDashboardScreen from "../features/manager/screens/OwnerDashboardScreen";
+import ProfileScreen from "../features/discovery/screens/ProfileScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -45,7 +45,7 @@ export default function MainTab() {
             <Tab.Screen name="Trang chủ" component={HomeScreen} options={{ tabBarLabel: "Trang chủ" }} />
             <Tab.Screen name="Sân đấu" component={SearchResultScreen} options={{ tabBarLabel: "Sân đấu" }} />
             <Tab.Screen name="Đặt lịch" component={CourtDetailScreen} options={{ tabBarLabel: "Đặt lịch" }} />
-            <Tab.Screen name="Hồ sơ" component={OwnerDashboardScreen} options={{ tabBarLabel: "Hồ sơ" }} />
+            <Tab.Screen name="Hồ sơ" component={ProfileScreen} options={{ tabBarLabel: "Hồ sơ" }} />
         </Tab.Navigator>
     );
 }
