@@ -171,7 +171,7 @@ export default function CourtDetailScreen() {
                         </View>
                     </View>
                     <TouchableOpacity 
-                        onPress={() => Alert.alert("Xác nhận", "Tiến hành thanh toán và đặt sân?")}
+                        onPress={() => navigation.navigate("Thanh toán")}
                         className="rounded-xl bg-emerald-700 px-8 py-3.5 shadow-md shadow-emerald-900/20"
                     >
                         <Text className="text-base font-bold text-white text-center">Tiếp tục đặt{"\n"}sân</Text>
