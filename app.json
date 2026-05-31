@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "ArenaS",
+    "slug": "arenas",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "arenas",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "jsEngine": "hermes",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.anonymous.arenas"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
