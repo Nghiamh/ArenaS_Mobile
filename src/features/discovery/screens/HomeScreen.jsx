@@ -1,6 +1,7 @@
 import { ScrollView, Text, TextInput, View, TouchableOpacity } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
+import { useNavigation } from "@react-navigation/native";
 
 const sports = [
     { name: "Bóng đá", sessions: "24 sân", tone: "bg-[#1A4D63]", icon: "soccer" },
@@ -30,6 +31,7 @@ export default function HomeScreen() {
     const { colorScheme, toggleColorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const iconColor = isDark ? "#FFFFFF" : "#000000";
+    const navigation = useNavigation();
 
     return (
         <ScrollView className="flex-1 bg-appBg" contentContainerClassName="px-4 pb-10 pt-12">
@@ -108,7 +110,12 @@ export default function HomeScreen() {
 
             <View className="mt-4 gap-4">
                 {venues.map((venue) => (
-                    <View key={venue.name} className="rounded-3xl bg-appSurface p-3 border border-appText/10">
+                    <TouchableOpacity 
+                        key={venue.name} 
+                        className="rounded-3xl bg-appSurface p-3 border border-appText/10"
+                        onPress={() => navigation.navigate("Đặt lịch")}
+                        activeOpacity={0.7}
+                    >
                         <View className="flex-row gap-3">
                             <View className="h-20 w-20 rounded-2xl bg-[#0B1B31]" />
                             <View className="flex-1">
@@ -124,15 +131,15 @@ export default function HomeScreen() {
                                         </View>
                                     ))}
                                 </View>
-                                <View className="mt-3 flex-row items-center justify-between">
-                                    <Text className="text-base font-bold text-emerald-300">{venue.price}</Text>
-                                    <View className="rounded-full bg-emerald-600 px-3 py-2">
-                                        <Text className="text-xs font-bold text-white">Đặt ngay</Text>
+                                <View className="mt-3 flex-row items-center justify-between gap-2">
+                                    <Text className="flex-1 text-sm font-bold text-emerald-400" numberOfLines={1}>{venue.price}</Text>
+                                    <View className="rounded-full bg-emerald-600 px-4 py-1.5 justify-center items-center">
+                                        <Text className="text-[13px] font-bold text-white">Đặt</Text>
                                     </View>
                                 </View>
                             </View>
                         </View>
-                    </View>
+                    </TouchableOpacity>
                 ))}
             </View>
         </ScrollView>
