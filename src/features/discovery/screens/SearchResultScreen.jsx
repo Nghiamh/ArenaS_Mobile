@@ -1,7 +1,9 @@
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView, View, Text, ScrollView, TouchableOpacity, Image, Alert } from "react-native";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useDispatch } from "react-redux";
+import { logout } from "../../auth/authSlice";
 
 const results = [
     {
@@ -42,24 +44,52 @@ const results = [
 const filters = ["Tất cả", "Gần đây", "Giá tốt nhất", "Đánh giá cao"];
 
 export default function SearchResultScreen() {
-    const { colorScheme } = useColorScheme();
+    const { colorScheme, toggleColorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
+    const iconColor = isDark ? "#FFFFFF" : "#000000";
     const navigation = useNavigation();
     const route = useRoute();
+    const dispatch = useDispatch();
     const sportName = route.params?.sport || "bóng đá";
 
     return (
-        <View className="flex-1 bg-appBg pt-12">
-            {/* Header */}
-            <View className="flex-row items-center justify-between px-4 pb-2">
-                <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Trang chủ")} className="p-2 -ml-2">
-                    <Ionicons name="arrow-back" size={24} color={isDark ? "#FFFFFF" : "#000000"} />
-                </TouchableOpacity>
-                <Text className="text-lg font-bold text-appText">Kết quả tìm kiếm</Text>
-                <TouchableOpacity onPress={() => Alert.alert("Bộ lọc", "Hiển thị bộ lọc nâng cao")} className="p-2 -mr-2">
-                    <Ionicons name="filter" size={24} color={isDark ? "#FFFFFF" : "#000000"} />
-                </TouchableOpacity>
-            </View>
+        <SafeAreaView className="flex-1 bg-appBg">
+            <View className="flex-1 pt-2">
+                {/* Header */}
+                <View className="flex-row items-center justify-between min-h-[48px] mb-2 px-4">
+                    <View className="z-10">
+                        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Trang chủ")} className="p-2 -ml-2">
+                            <Ionicons name="arrow-back" size={24} color={iconColor} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View className="absolute inset-0 items-center justify-center z-0" pointerEvents="none">
+                        <Image 
+                            source={require('../../../../assets/Img/bannerNoBg.JPG.png')} 
+                            className="h-28 w-64"
+                            resizeMode="contain"
+                        />
+                    </View>
+
+                    <View className="flex-row items-center gap-2 z-10">
+                        <TouchableOpacity
+                            onPress={() => dispatch(logout())}
+                            className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
+                        >
+                            <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={toggleColorScheme}
+                            className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
+                        >
+                            <MaterialCommunityIcons
+                                name={isDark ? "weather-sunny" : "weather-night"}
+                                size={18}
+                                color={iconColor}
+                            />
+                        </TouchableOpacity>
+                    </View>
+                </View>
 
             {/* Sub-header info */}
             <View className="px-4 mt-4">
@@ -149,5 +179,6 @@ export default function SearchResultScreen() {
                 ))}
             </ScrollView>
         </View>
+        </SafeAreaView>
     );
 }

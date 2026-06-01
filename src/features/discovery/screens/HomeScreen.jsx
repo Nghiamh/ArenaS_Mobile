@@ -1,4 +1,4 @@
-import { ScrollView, Text, TextInput, View, TouchableOpacity, Alert, Image } from "react-native";
+import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Alert, Image, ImageBackground } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
@@ -39,35 +39,36 @@ export default function HomeScreen() {
     const dispatch = useDispatch();
 
     return (
-        <ScrollView className="flex-1 bg-appBg" contentContainerClassName="px-4 pb-10 pt-12">
-            <View className="flex-row items-start justify-between">
-                <View className="flex-1 pr-3">
-                    <Text className="mt-1 text-3xl font-extrabold tracking-tight text-appText">ArenaS</Text>
-                    <View className="mt-2 flex-row items-center gap-2">
-                        <View className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                        <Text className="text-sm text-appText/75">TP. Hồ Chí Minh, VN</Text>
+        <SafeAreaView className="flex-1 bg-appBg">
+            <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10 pt-2">
+                <View className="flex-row items-center justify-end min-h-[48px] mb-2">
+                    <View className="absolute inset-0 items-center justify-center z-0" pointerEvents="none">
+                        <Image 
+                            source={require('../../../../assets/Img/bannerNoBg.JPG.png')} 
+                            className="h-28 w-64"
+                            resizeMode="contain"
+                        />
+                    </View>
+
+                    <View className="flex-row items-center gap-2 z-10">
+                        <TouchableOpacity
+                            onPress={() => dispatch(logout())}
+                            className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
+                        >
+                            <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={toggleColorScheme}
+                            className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
+                        >
+                            <MaterialCommunityIcons
+                                name={isDark ? "weather-sunny" : "weather-night"}
+                                size={18}
+                                color={iconColor}
+                            />
+                        </TouchableOpacity>
                     </View>
                 </View>
-
-                <View className="flex-row items-center gap-2">
-                    <TouchableOpacity
-                        onPress={() => dispatch(logout())}
-                        className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
-                    >
-                        <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={toggleColorScheme}
-                        className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
-                    >
-                        <MaterialCommunityIcons
-                            name={isDark ? "weather-sunny" : "weather-night"}
-                            size={18}
-                            color={iconColor}
-                        />
-                    </TouchableOpacity>
-                </View>
-            </View>
 
             <View className="mt-5 flex-row items-center gap-3">
                 <View className="flex-1 flex-row items-center rounded-2xl border border-appText/10 bg-appSurface px-4 py-3">
@@ -178,5 +179,6 @@ export default function HomeScreen() {
                 ))}
             </View>
         </ScrollView>
+        </SafeAreaView>
     );
 }
