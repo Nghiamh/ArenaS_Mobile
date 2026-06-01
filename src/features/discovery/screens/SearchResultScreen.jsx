@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 
 const results = [
     {
@@ -45,6 +45,8 @@ export default function SearchResultScreen() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const navigation = useNavigation();
+    const route = useRoute();
+    const sportName = route.params?.sport || "bóng đá";
 
     return (
         <View className="flex-1 bg-appBg pt-12">
@@ -61,7 +63,7 @@ export default function SearchResultScreen() {
 
             {/* Sub-header info */}
             <View className="px-4 mt-4">
-                <Text className="text-sm text-appText/60">Tìm thấy 24 sân bóng đá tại</Text>
+                <Text className="text-sm text-appText/60">Tìm thấy 24 sân {sportName.toLowerCase()} tại</Text>
                 <View className="flex-row items-center gap-1 mt-1">
                     <Ionicons name="location-outline" size={16} color="#059669" />
                     <Text className="text-sm font-bold text-appText">TP. Hồ Chí Minh, VN</Text>
