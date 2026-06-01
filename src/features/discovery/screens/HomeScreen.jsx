@@ -14,18 +14,20 @@ const sports = [
 
 const venues = [
     {
-        name: "Arena Center Q1",
-        address: "12 Lê Lợi, Quận 1, TP. HCM",
+        name: "Arena Football",
+        address: "Quận 9, TP. Thủ Đức, TP. HCM",
         price: "250.000đ/giờ",
         rating: "4.8",
-        tags: ["Bóng đá", "Tennis"],
+        tags: ["Bóng đá"],
+        image: "https://media.istockphoto.com/id/2167969183/photo/ev-arena-kelab-sultan-sulaiman-at-night.jpg?s=612x612&w=0&k=20&c=kLbnsbeKQy5sTs99dmY82ktY28_TMZDe7wLj0PO42YI="
     },
     {
-        name: "Badminton Pro Hub",
-        address: "78 Tạ Hiện, Quận 5, TP. HCM",
+        name: "Badminton Pro",
+        address: "Quận 9, TP. Thủ Đức, TP. HCM",
         price: "180.000đ/giờ",
         rating: "4.9",
         tags: ["Cầu lông", "Pickleball"],
+        image: "https://sportnet.vn/uploads/venue/608/-album--1721641826.jpeg"
     },
 ];
 
@@ -146,7 +148,11 @@ export default function HomeScreen() {
                         activeOpacity={0.7}
                     >
                         <View className="flex-row gap-3">
-                            <View className="h-20 w-20 rounded-2xl bg-[#0B1B31]" />
+                            <Image
+                                source={{ uri: venue.image }}
+                                className="h-20 w-20 rounded-2xl bg-slate-200"
+                                resizeMode="cover"
+                            />
                             <View className="flex-1">
                                 <View className="flex-row items-start justify-between gap-2">
                                     <Text className="flex-1 text-base font-bold text-appText">{venue.name}</Text>

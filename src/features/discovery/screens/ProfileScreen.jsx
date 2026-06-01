@@ -17,7 +17,7 @@ export default function ProfileScreen() {
                     <Ionicons name="location-outline" size={24} color="#059669" />
                     <Text className="text-2xl font-bold text-emerald-600">ArenaS</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => Alert.alert("Thông báo", "Bạn không có thông báo mới.")}
                     className="h-10 w-10 items-center justify-center rounded-full bg-appSurface border border-appText/10"
                 >
@@ -28,8 +28,8 @@ export default function ProfileScreen() {
             {/* Profile Info */}
             <View className="mt-6 flex-row items-center">
                 <View className="relative">
-                    <Image 
-                        source={{ uri: "https://i.pravatar.cc/150?img=11" }} 
+                    <Image
+                        source={{ uri: "https://i.pravatar.cc/150?img=11" }}
                         className="h-16 w-16 rounded-full"
                     />
                     <View className="absolute bottom-0 right-0 rounded-full bg-emerald-500 p-0.5 border-2 border-appBg">
@@ -37,10 +37,10 @@ export default function ProfileScreen() {
                     </View>
                 </View>
                 <View className="ml-4 flex-1">
-                    <Text className="text-xl font-bold text-appText">Nguyễn Minh Quân</Text>
+                    <Text className="text-xl font-bold text-appText">Nguyễn Văn A</Text>
                     <Text className="text-sm text-appText/60">Hội viên Vàng • ID: #AS2024</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => Alert.alert("Cài đặt", "Chuyển đến trang cài đặt tài khoản.")}
                     className="h-10 w-10 items-center justify-center rounded-xl bg-appSurface border border-appText/10"
                 >
@@ -64,13 +64,13 @@ export default function ProfileScreen() {
             <View className="mt-8 flex-row items-center justify-between">
                 <Text className="text-lg font-bold text-appText">Đơn đặt của tôi</Text>
                 <View className="flex-row gap-2">
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => Alert.alert("Đơn đặt", "Hiển thị tất cả đơn đặt")}
                         className="rounded-full bg-emerald-700 px-4 py-1.5"
                     >
                         <Text className="text-xs font-semibold text-white">Tất cả</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => Alert.alert("Đơn đặt", "Hiển thị đơn đặt sắp tới")}
                         className="rounded-full bg-appSurface border border-appText/10 px-4 py-1.5"
                     >
@@ -82,7 +82,7 @@ export default function ProfileScreen() {
             {/* Bookings List */}
             <View className="mt-4 gap-4">
                 {/* Upcoming */}
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => navigation.navigate("Đặt lịch")}
                     activeOpacity={0.8}
                     className="overflow-hidden rounded-2xl bg-appSurface border border-appText/10 shadow-sm shadow-black/5"
@@ -120,7 +120,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
 
                 {/* Completed */}
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => navigation.navigate("Đặt lịch")}
                     activeOpacity={0.8}
                     className="rounded-2xl bg-appSurface p-4 border border-appText/10 shadow-sm shadow-black/5"
@@ -155,7 +155,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
 
                 {/* Cancelled */}
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => navigation.navigate("Đặt lịch")}
                     activeOpacity={0.8}
                     className="rounded-2xl bg-appSurface p-4 border border-appText/10 shadow-sm shadow-black/5"
@@ -190,14 +190,14 @@ export default function ProfileScreen() {
 
             {/* Quick Actions */}
             <View className="mt-6 flex-row gap-4">
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => Alert.alert("Hỗ trợ", "Liên hệ tổng đài 1900 xxxx")}
                     className="flex-1 items-center justify-center rounded-2xl bg-appSurface py-5 border border-appText/10 shadow-sm shadow-black/5"
                 >
                     <Ionicons name="headset-outline" size={24} color="#059669" />
                     <Text className="mt-2 text-sm font-medium text-appText">Hỗ trợ</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => Alert.alert("Ví tiền", "Số dư hiện tại: 0đ")}
                     className="flex-1 items-center justify-center rounded-2xl bg-appSurface py-5 border border-appText/10 shadow-sm shadow-black/5"
                 >

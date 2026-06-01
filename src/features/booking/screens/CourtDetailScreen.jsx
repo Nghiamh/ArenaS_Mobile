@@ -1,24 +1,65 @@
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from "react-native";
+import { useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Dimensions } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
+
+const { width } = Dimensions.get("window");
+
+const courtImages = [
+    "https://images.unsplash.com/photo-1622228514120-e7a9b708b7d4?q=80&w=1000&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?q=80&w=1000&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1554068865-24cecd4e34f8?q=80&w=1000&auto=format&fit=crop"
+];
 
 export default function CourtDetailScreen() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const navigation = useNavigation();
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    const onScroll = (event) => {
+        const slideSize = event.nativeEvent.layoutMeasurement.width;
+        const index = event.nativeEvent.contentOffset.x / slideSize;
+        setActiveIndex(Math.round(index));
+    };
 
     return (
         <View className="flex-1 bg-appBg">
             <ScrollView className="flex-1" contentContainerClassName="pb-32" showsVerticalScrollIndicator={false}>
-                {/* Header Image */}
-                <View className="relative h-72 w-full">
-                    <Image 
-                        source={{ uri: "https://images.unsplash.com/photo-1622228514120-e7a9b708b7d4?q=80&w=1000&auto=format&fit=crop" }} 
-                        className="h-full w-full object-cover"
-                    />
+                {/* Header Image Gallery */}
+                <View className="relative h-72 w-full bg-slate-900">
+                    <ScrollView 
+                        horizontal 
+                        pagingEnabled 
+                        showsHorizontalScrollIndicator={false}
+                        onScroll={onScroll}
+                        scrollEventThrottle={16}
+                        className="h-full w-full"
+                    >
+                        {courtImages.map((uri, index) => (
+                            <Image 
+                                key={index}
+                                source={{ uri }} 
+                                style={{ width, height: 288 }} 
+                                resizeMode="cover"
+                            />
+                        ))}
+                    </ScrollView>
+
+                    {/* Pagination Dots */}
+                    <View pointerEvents="none" className="absolute bottom-16 left-0 right-0 flex-row justify-center gap-1.5 z-10">
+                        {courtImages.map((_, index) => (
+                            <View 
+                                key={index} 
+                                className={`h-1.5 rounded-full ${activeIndex === index ? 'w-5 bg-emerald-500' : 'w-1.5 bg-white/70'}`}
+                            />
+                        ))}
+                    </View>
+
                     {/* Top Bar Actions */}
-                    <View className="absolute left-4 right-4 top-12 flex-row justify-between">
+                    <View pointerEvents="box-none" className="absolute left-4 right-4 top-12 flex-row justify-between z-10">
                         <TouchableOpacity 
                             onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Trang chủ")}
                             className="h-10 w-10 items-center justify-center rounded-full bg-white/70"
