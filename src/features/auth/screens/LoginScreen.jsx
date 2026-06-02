@@ -1,19 +1,48 @@
-import { ScrollView, Text, View, TouchableOpacity, TextInput, Image } from "react-native";
+import React, { useState } from "react";
+import { ScrollView, Text, View, TouchableOpacity, TextInput, Image, ActivityIndicator, Alert } from "react-native";
 import { useDispatch } from "react-redux";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
-import { setGuestMode } from "../authSlice";
+import { setGuestMode, setCredentials } from "../authSlice";
 import { setItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
+import authApi from "../../../api/authApi";
 
 export default function LoginScreen() {
     const dispatch = useDispatch();
     const navigation = useNavigation();
+    
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleLogin = async () => {
-        await setItem(STORAGE_KEYS.guestMode, "true");
-        dispatch(setGuestMode());
+        if (!email || !password) {
+            Alert.alert("Lỗi", "Vui lòng nhập đầy đủ email và mật khẩu.");
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const response = await authApi.login({ email, password });
+            
+            // Assume response data structure contains user and token
+            const { token, user } = response.data;
+            
+            if (token) {
+                await setItem(STORAGE_KEYS.authToken, token);
+                await setItem("user", JSON.stringify(user));
+                
+                dispatch(setCredentials({ user, token }));
+            }
+        } catch (error) {
+            console.error("Login error:", error);
+            const errorMessage = error.response?.data?.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.";
+            Alert.alert("Lỗi", errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleSkipLogin = async () => {
@@ -51,6 +80,8 @@ export default function LoginScreen() {
                                 placeholderTextColor="#94A3B8"
                                 className="flex-1 ml-2 text-sm text-gray-800"
                                 autoCapitalize="none"
+                                value={email}
+                                onChangeText={setEmail}
                             />
                         </View>
                     </View>
@@ -69,6 +100,8 @@ export default function LoginScreen() {
                                 placeholderTextColor="#94A3B8"
                                 secureTextEntry
                                 className="flex-1 mx-2 text-sm text-gray-800"
+                                value={password}
+                                onChangeText={setPassword}
                             />
                             <Ionicons name="eye-outline" size={18} color="#64748B" />
                         </View>
@@ -76,9 +109,14 @@ export default function LoginScreen() {
 
                     <TouchableOpacity
                         onPress={handleLogin}
-                        className="rounded-xl bg-[#00522B] py-3.5 shadow-sm shadow-green-900/20 items-center justify-center"
+                        disabled={isLoading}
+                        className={`rounded-xl py-3.5 shadow-sm items-center justify-center ${isLoading ? 'bg-gray-400' : 'bg-[#00522B] shadow-green-900/20'}`}
                     >
-                        <Text className="text-sm font-bold text-white">Đăng nhập</Text>
+                        {isLoading ? (
+                            <ActivityIndicator color="white" />
+                        ) : (
+                            <Text className="text-sm font-bold text-white">Đăng nhập</Text>
+                        )}
                     </TouchableOpacity>
 
                     <View className="flex-row items-center mt-6 mb-5">

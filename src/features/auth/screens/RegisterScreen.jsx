@@ -1,9 +1,52 @@
-import { ScrollView, Text, View, TouchableOpacity, TextInput, Image } from "react-native";
+import React, { useState } from "react";
+import { ScrollView, Text, View, TouchableOpacity, TextInput, Image, ActivityIndicator, Alert } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import authApi from "../../../api/authApi";
 
 export default function RegisterScreen() {
     const navigation = useNavigation();
+
+    const [fullName, setFullName] = useState("");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [isAgreed, setIsAgreed] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleRegister = async () => {
+        if (!fullName || !email || !password || !confirmPassword) {
+            Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin.");
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp.");
+            return;
+        }
+
+        if (!isAgreed) {
+            Alert.alert("Lỗi", "Vui lòng đồng ý với Điều khoản dịch vụ và Chính sách bảo mật.");
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const response = await authApi.register({ name: fullName, email, password });
+            
+            Alert.alert(
+                "Thành công", 
+                "Đăng ký tài khoản thành công! Vui lòng đăng nhập.",
+                [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+            );
+        } catch (error) {
+            console.error("Register error:", error);
+            const errorMessage = error?.response?.data?.message || "Đăng ký thất bại. Vui lòng kiểm tra lại.";
+            Alert.alert("Lỗi", errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <View className="flex-1 bg-[#F2F7F4]">
@@ -39,6 +82,8 @@ export default function RegisterScreen() {
                                     placeholder="Nguyễn Văn A"
                                     placeholderTextColor="#94A3B8"
                                     className="flex-1 ml-2 text-sm text-gray-800"
+                                    value={fullName}
+                                    onChangeText={setFullName}
                                 />
                             </View>
                         </View>
@@ -52,6 +97,8 @@ export default function RegisterScreen() {
                                     placeholderTextColor="#94A3B8"
                                     className="flex-1 ml-2 text-sm text-gray-800"
                                     autoCapitalize="none"
+                                    value={email}
+                                    onChangeText={setEmail}
                                 />
                             </View>
                         </View>
@@ -65,6 +112,8 @@ export default function RegisterScreen() {
                                     placeholderTextColor="#94A3B8"
                                     secureTextEntry
                                     className="flex-1 mx-2 text-sm text-gray-800"
+                                    value={password}
+                                    onChangeText={setPassword}
                                 />
                                 <Ionicons name="eye-outline" size={18} color="#64748B" />
                             </View>
@@ -79,13 +128,19 @@ export default function RegisterScreen() {
                                     placeholderTextColor="#94A3B8"
                                     secureTextEntry
                                     className="flex-1 ml-2 text-sm text-gray-800"
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
                                 />
                             </View>
                         </View>
 
                         <View className="flex-row items-start mt-2 pr-2">
-                            <TouchableOpacity className="mt-0.5">
-                                <Ionicons name="square-outline" size={18} color="#94A3B8" />
+                            <TouchableOpacity className="mt-0.5" onPress={() => setIsAgreed(!isAgreed)}>
+                                <Ionicons 
+                                    name={isAgreed ? "checkbox" : "square-outline"} 
+                                    size={18} 
+                                    color={isAgreed ? "#007F3F" : "#94A3B8"} 
+                                />
                             </TouchableOpacity>
                             <Text className="ml-2 flex-1 text-[11px] text-gray-500 leading-relaxed">
                                 Tôi đồng ý với <Text className="font-bold text-[#007F3F]">Điều khoản dịch vụ</Text> và <Text className="font-bold text-[#007F3F]">Chính sách bảo mật</Text>.
@@ -93,10 +148,18 @@ export default function RegisterScreen() {
                         </View>
 
                         <TouchableOpacity 
-                            className="mt-4 flex-row rounded-xl bg-[#22C55E] py-3.5 shadow-sm shadow-green-500/30 items-center justify-center gap-1"
+                            onPress={handleRegister}
+                            disabled={isLoading}
+                            className={`mt-4 flex-row rounded-xl py-3.5 shadow-sm items-center justify-center gap-1 ${isLoading ? 'bg-gray-400' : 'bg-[#22C55E] shadow-green-500/30'}`}
                         >
-                            <Text className="text-sm font-bold text-white">Đăng ký</Text>
-                            <Ionicons name="arrow-forward" size={16} color="white" />
+                            {isLoading ? (
+                                <ActivityIndicator color="white" />
+                            ) : (
+                                <>
+                                    <Text className="text-sm font-bold text-white">Đăng ký</Text>
+                                    <Ionicons name="arrow-forward" size={16} color="white" />
+                                </>
+                            )}
                         </TouchableOpacity>
 
                         <View className="h-px w-full bg-gray-200 my-4" />
