@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Alert, Image, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -128,6 +128,7 @@ export default function HomeScreen() {
 
     const isLoggedIn = !!token && !isGuest;
     const isLoading = status === "loading";
+    const [activeFilter, setActiveFilter] = useState("Tất cả");
 
     // Fetch courts khi component mount
     useEffect(() => {
@@ -144,8 +145,25 @@ export default function HomeScreen() {
     // Nhóm theo môn thể thao
     const sportGroups = groupBySport(courts);
 
-    // Lấy tối đa 4 sân để hiển thị "Sân gần bạn"
-    const nearbyVenues = courts.slice(0, 4);
+    // Áp dụng filter cho danh sách "Sân gần bạn"
+    const getFilteredVenues = () => {
+        let filtered = [...courts];
+        switch (activeFilter) {
+            case "Nổi bật":
+                filtered = filtered.sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0));
+                break;
+            case "Mới":
+                filtered = filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                break;
+            case "Gần đây":
+                filtered = filtered.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+                break;
+            default:
+                break;
+        }
+        return filtered.slice(0, 6);
+    };
+    const nearbyVenues = getFilteredVenues();
 
     return (
         <SafeAreaView className="flex-1 bg-appBg">
@@ -206,13 +224,13 @@ export default function HomeScreen() {
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-5" contentContainerClassName="gap-3 pr-4">
-                    {['Tất cả', 'Gần đây', 'Nổi bật', 'Mới'].map((item, index) => (
+                    {['Tất cả', 'Gần đây', 'Nổi bật', 'Mới'].map((item) => (
                         <TouchableOpacity
                             key={item}
-                            onPress={() => Alert.alert("Danh mục", `Đã chọn: ${item}`)}
-                            className={`rounded-full px-4 py-2 ${index === 0 ? 'bg-emerald-700' : 'bg-appSurface border border-appText/10'}`}
+                            onPress={() => setActiveFilter(item)}
+                            className={`rounded-full px-4 py-2 ${activeFilter === item ? 'bg-emerald-700' : 'bg-appSurface border border-appText/10'}`}
                         >
-                            <Text className={`text-sm font-semibold ${index === 0 ? 'text-white' : 'text-appText/80'}`}>{item}</Text>
+                            <Text className={`text-sm font-semibold ${activeFilter === item ? 'text-white' : 'text-appText/80'}`}>{item}</Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>

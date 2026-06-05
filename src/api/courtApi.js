@@ -22,7 +22,7 @@ const courtApi = {
      * GET /api/courts/:id
      */
     getById: (id) => {
-        return axiosClient.get(`/api/courts/${id}`);
+        return axiosClient.get(`/api/courts/public/${id}`);
     },
 
     /**
