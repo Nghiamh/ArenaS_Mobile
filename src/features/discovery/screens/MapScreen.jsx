@@ -1,10 +1,516 @@
-import { Text, View } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { View, StyleSheet, ActivityIndicator, Text, TextInput, TouchableOpacity, Alert, Linking } from "react-native";
+import { WebView } from "react-native-webview";
+import { useRoute, useNavigation } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import * as Location from 'expo-location';
 
 export default function MapScreen() {
+    const route = useRoute();
+    const navigation = useNavigation();
+    const webViewRef = useRef(null);
+    const { venues = [] } = useSelector((state) => state.venue);
+    const [userLocation, setUserLocation] = useState(null);
+    const [isLoadingLoc, setIsLoadingLoc] = useState(true);
+    const [searchAddress, setSearchAddress] = useState("");
+    const [isSearching, setIsSearching] = useState(false);
+    
+    // Nếu được điều hướng từ chi tiết sân, sẽ có latitude/longitude
+    const { latitude, longitude, venueName } = route.params || {};
+
+    // Mặc định TPHCM nếu không có
+    const lat = latitude || 10.762622;
+    const lng = longitude || 106.660172;
+    const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+
+    useEffect(() => {
+        (async () => {
+            try {
+                let { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    console.log("Permission to access location was denied");
+                    setIsLoadingLoc(false);
+                    return;
+                }
+                
+                // Ép lấy vị trí mới nhất, có timeout 3 giây để tránh bị treo trên Emulator
+                const locationPromise = Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
+                
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error("Location timeout")), 3000)
+                );
+
+                let location = await Promise.race([locationPromise, timeoutPromise]);
+                
+                if (location && location.coords) {
+                    setUserLocation({
+                        lat: location.coords.latitude,
+                        lng: location.coords.longitude
+                    });
+                }
+            } catch (error) {
+                console.log("Không lấy được GPS (Timeout hoặc tắt GPS), dùng mặc định HCM");
+                // Fallback vị trí ảo ở TPHCM nếu không lấy được GPS
+                setUserLocation({ lat: 10.762622, lng: 106.660172 });
+            } finally {
+                setIsLoadingLoc(false);
+            }
+        })();
+    }, []);
+
+    // Format giá tiền
+    const formatPrice = (price) => {
+        if (!price && price !== 0) return "Liên hệ";
+        return price.toLocaleString("vi-VN") + "đ/giờ";
+    };
+
+    // Chuẩn bị JS để render marker & popup cho các sân
+    const markersJs = venues
+        .filter(v => v.coordinates?.latitude && v.coordinates?.longitude)
+        .map(v => {
+            const popupHtml = `
+                <div class="custom-popup">
+                    <div class="popup-header">
+                        <div class="popup-title">${v.name.replace(/'/g, "\\'")}</div>
+                        <div class="popup-badge">Đang mở</div>
+                    </div>
+                    <div class="popup-address">${(v.location || "").replace(/'/g, "\\'")}</div>
+                    <div class="popup-info">
+                        <div class="popup-price">${formatPrice(v.price_per_hour)}</div>
+                        <div class="popup-rating">⭐ ${v.avg_rating || "0.0"}</div>
+                    </div>
+                    <button class="btn-primary" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: 'VIEW_DETAIL', id: '${v.id || v._id}'}))">Xem chi tiết</button>
+                    <button class="btn-outline" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: 'DIRECTIONS', lat: ${v.coordinates.latitude}, lng: ${v.coordinates.longitude}}))">Chỉ đường</button>
+                </div>
+            `;
+            const safePopupHtml = popupHtml.replace(/[\r\n]+/g, '').replace(/'/g, "\\'");
+            
+            return `
+                {
+                    const el = document.createElement('div');
+                    el.className = 'marker-icon';
+                    el.style.backgroundColor = '${venueName === v.name ? "#EF4444" : "#3B82F6"}'; // Đỏ nếu đang chọn, Xanh nếu bth
+                    
+                    const popup = new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML('${safePopupHtml}');
+                    
+                    const marker = new mapboxgl.Marker({ element: el })
+                        .setLngLat([${v.coordinates.longitude}, ${v.coordinates.latitude}])
+                        .setPopup(popup)
+                        .addTo(map);
+                        
+                    ${venueName === v.name ? `marker.togglePopup();` : ''}
+                }
+            `;
+        })
+        .join("\n");
+
+    const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+            <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
+            <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+            <style>
+                body { margin: 0; padding: 0; }
+                #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+                .marker-icon {
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    border: 3px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                    cursor: pointer;
+                }
+                .user-marker {
+                    width: 16px;
+                    height: 16px;
+                    background-color: #3B82F6;
+                    border-radius: 50%;
+                    border: 3px solid white;
+                    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+                }
+                .custom-popup {
+                    font-family: Arial, sans-serif;
+                    padding: 8px;
+                    width: 220px;
+                }
+                .popup-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 4px;
+                }
+                .popup-title {
+                    font-weight: bold;
+                    font-size: 14px;
+                    color: #111827;
+                    flex: 1;
+                }
+                .popup-badge {
+                    background-color: #D1FAE5;
+                    color: #059669;
+                    font-size: 10px;
+                    padding: 2px 6px;
+                    border-radius: 12px;
+                    font-weight: bold;
+                    margin-left: 8px;
+                }
+                .popup-address {
+                    font-size: 11px;
+                    color: #6B7280;
+                    margin-bottom: 8px;
+                    line-height: 1.3;
+                }
+                .popup-info {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 12px;
+                }
+                .popup-price {
+                    font-weight: bold;
+                    font-size: 12px;
+                    color: #111827;
+                }
+                .popup-rating {
+                    font-size: 12px;
+                    color: #F59E0B;
+                    font-weight: bold;
+                }
+                .btn-primary {
+                    width: 100%;
+                    background-color: #111827;
+                    color: white;
+                    border: none;
+                    padding: 8px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    margin-bottom: 6px;
+                    cursor: pointer;
+                }
+                .btn-outline {
+                    width: 100%;
+                    background-color: white;
+                    color: #111827;
+                    border: 1px solid #D1D5DB;
+                    padding: 8px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    cursor: pointer;
+                }
+                .mapboxgl-popup-content {
+                    border-radius: 12px;
+                    padding: 10px;
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                mapboxgl.accessToken = '${mapboxToken}';
+                
+                // Quyết định center map (Ưu tiên: Params -> User Location -> Mặc định)
+                let centerLng = ${lng};
+                let centerLat = ${lat};
+                ${userLocation && !venueName ? `
+                    centerLng = ${userLocation.lng};
+                    centerLat = ${userLocation.lat};
+                ` : ''}
+
+                const map = new mapboxgl.Map({
+                    container: 'map',
+                    style: 'mapbox://styles/mapbox/streets-v12',
+                    center: [centerLng, centerLat],
+                    zoom: 13,
+                    pitch: 0
+                });
+
+                // Add User Location Marker
+                ${userLocation ? `
+                    const userEl = document.createElement('div');
+                    userEl.className = 'user-marker';
+                    window.userMarker = new mapboxgl.Marker({ element: userEl })
+                        .setLngLat([${userLocation.lng}, ${userLocation.lat}])
+                        .addTo(map);
+                ` : ''}
+
+                // Render all venues
+                ${markersJs}
+
+                // Thêm control điều hướng (zoom in/out)
+                map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+            </script>
+        </body>
+        </html>
+    `;
+
+    const handleMessage = (event) => {
+        try {
+            const data = JSON.parse(event.nativeEvent.data);
+            if (data.type === 'VIEW_DETAIL') {
+                navigation.navigate("Đặt lịch", { courtId: data.id });
+            } else if (data.type === 'DIRECTIONS') {
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${data.lat},${data.lng}`;
+                Linking.openURL(url);
+            }
+        } catch (error) {
+            console.error("Lỗi parse message từ WebView", error);
+        }
+    };
+
+    const handleSearchAddress = async () => {
+        if (!searchAddress.trim()) return;
+        setIsSearching(true);
+        try {
+            const res = await fetch(`https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(searchAddress)}&access_token=${mapboxToken}&limit=1`);
+            const data = await res.json();
+            if (data.features && data.features.length > 0) {
+                const [lng, lat] = data.features[0].geometry.coordinates;
+                // Update map via JS injection to avoid reloading WebView
+                if (webViewRef.current) {
+                    webViewRef.current.injectJavaScript(`
+                        if (window.userMarker) {
+                            window.userMarker.setLngLat([${lng}, ${lat}]);
+                        } else {
+                            const userEl = document.createElement('div');
+                            userEl.className = 'user-marker';
+                            window.userMarker = new mapboxgl.Marker({ element: userEl })
+                                .setLngLat([${lng}, ${lat}])
+                                .addTo(map);
+                        }
+                        map.flyTo({ center: [${lng}, ${lat}], zoom: 14 });
+                        true;
+                    `);
+                }
+            } else {
+                Alert.alert("Không tìm thấy", "Vui lòng thử nhập địa chỉ rõ ràng hơn.");
+            }
+        } catch (error) {
+            Alert.alert("Lỗi", "Không thể tìm kiếm địa chỉ lúc này.");
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleUseMyLocation = async () => {
+        setIsSearching(true);
+        try {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert("Lỗi", "Bạn chưa cấp quyền vị trí.");
+                return;
+            }
+            const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Location timeout")), 3000)
+            );
+            
+            let location = await Promise.race([locationPromise, timeoutPromise]);
+            const lat = location.coords.latitude;
+            const lng = location.coords.longitude;
+            
+            if (webViewRef.current) {
+                webViewRef.current.injectJavaScript(`
+                    if (window.userMarker) {
+                        window.userMarker.setLngLat([${lng}, ${lat}]);
+                    } else {
+                        const userEl = document.createElement('div');
+                        userEl.className = 'user-marker';
+                        window.userMarker = new mapboxgl.Marker({ element: userEl })
+                            .setLngLat([${lng}, ${lat}])
+                            .addTo(map);
+                    }
+                    map.flyTo({ center: [${lng}, ${lat}], zoom: 14 });
+                    true;
+                `);
+            }
+        } catch (e) {
+            Alert.alert("Cảnh báo", "Không lấy được vị trí thực tế. Đã đặt vị trí giả định tại trung tâm TP.HCM. Bạn có thể nhập địa chỉ thủ công.");
+            const hcmLat = 10.762622;
+            const hcmLng = 106.660172;
+            if (webViewRef.current) {
+                webViewRef.current.injectJavaScript(`
+                    if (window.userMarker) {
+                        window.userMarker.setLngLat([${hcmLng}, ${hcmLat}]);
+                    } else {
+                        const userEl = document.createElement('div');
+                        userEl.className = 'user-marker';
+                        window.userMarker = new mapboxgl.Marker({ element: userEl })
+                            .setLngLat([${hcmLng}, ${hcmLat}])
+                            .addTo(map);
+                    }
+                    map.flyTo({ center: [${hcmLng}, ${hcmLat}], zoom: 14 });
+                    true;
+                `);
+            }
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    if (isLoadingLoc) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#059669" />
+            </View>
+        );
+    }
+
     return (
-        <View className="flex-1 items-center justify-center bg-appBg px-6">
-            <Text className="text-2xl font-bold text-appText">Map view</Text>
-            <Text className="mt-2 text-center text-appText/70">Integrate a map provider here for venue discovery and distance sorting.</Text>
+        <View style={styles.container}>
+            <WebView
+                ref={webViewRef}
+                source={{ html: htmlContent }}
+                style={styles.map}
+                originWhitelist={['*']}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                onMessage={handleMessage}
+            />
+            
+            {/* Search Overlay */}
+            {!venueName && (
+                <View style={styles.searchOverlay}>
+                    <View style={styles.searchHeader}>
+                        <Text style={styles.searchTitle}>Tìm sân theo vị trí</Text>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{venues.length} sân</Text>
+                        </View>
+                    </View>
+                    
+                    <TouchableOpacity 
+                        style={styles.btnMyLocation} 
+                        onPress={handleUseMyLocation}
+                        disabled={isSearching}
+                    >
+                        <Text style={styles.btnMyLocationText}>Dùng vị trí của tôi</Text>
+                    </TouchableOpacity>
+                    
+                    <View style={styles.divider}>
+                        <Text style={styles.dividerText}>HOẶC NHẬP ĐỊA CHỈ</Text>
+                    </View>
+                    
+                    <View style={styles.searchRow}>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nhập địa chỉ, quận/huyện..."
+                            value={searchAddress}
+                            onChangeText={setSearchAddress}
+                            onSubmitEditing={handleSearchAddress}
+                        />
+                        <TouchableOpacity 
+                            style={styles.btnSearch} 
+                            onPress={handleSearchAddress}
+                            disabled={isSearching}
+                        >
+                            {isSearching ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <Text style={styles.btnSearchText}>Tìm</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    map: {
+        flex: 1,
+    },
+    searchOverlay: {
+        position: 'absolute',
+        top: 40,
+        left: 20,
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 16,
+        width: 320,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    searchHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    searchTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#111827',
+    },
+    badge: {
+        backgroundColor: '#D1FAE5',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 12,
+    },
+    badgeText: {
+        fontSize: 12,
+        color: '#059669',
+        fontWeight: 'bold',
+    },
+    btnMyLocation: {
+        borderWidth: 1,
+        borderColor: '#10B981',
+        borderRadius: 8,
+        paddingVertical: 8,
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    btnMyLocationText: {
+        color: '#10B981',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    divider: {
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    dividerText: {
+        fontSize: 10,
+        color: '#6B7280',
+        fontWeight: 'bold',
+    },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    input: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: '#D1D5DB',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginRight: 8,
+        fontSize: 14,
+    },
+    btnSearch: {
+        backgroundColor: '#10B981',
+        borderRadius: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    btnSearchText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 14,
+    }
+});
