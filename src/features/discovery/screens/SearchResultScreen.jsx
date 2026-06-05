@@ -40,6 +40,7 @@ export default function SearchResultScreen() {
     const route = useRoute();
     const dispatch = useDispatch();
     const sportName = route.params?.sport || "";
+    const query = route.params?.query || "";
 
     const { venues: courts, status, error } = useSelector((state) => state.venue);
     const isLoading = status === "loading";
@@ -51,13 +52,26 @@ export default function SearchResultScreen() {
         }
     }, [dispatch, courts.length]);
 
-    // Lọc theo sport nếu có
-    const filteredCourts = sportName
-        ? courts.filter((c) => {
+    // Lọc theo sport hoặc query nếu có
+    const filteredCourts = courts.filter((c) => {
+        let matchesSport = true;
+        let matchesQuery = true;
+
+        if (sportName) {
             const sports = c.sports || [];
-            return sports.some((s) => s.toLowerCase().includes(sportName.toLowerCase()));
-        })
-        : courts;
+            matchesSport = sports.some((s) => s.toLowerCase().includes(sportName.toLowerCase()));
+        }
+
+        if (query) {
+            const q = query.toLowerCase();
+            const nameMatch = (c.name || "").toLowerCase().includes(q);
+            const addressMatch = (c.location || c.address || "").toLowerCase().includes(q);
+            const sportMatch = (c.sports || []).some(s => s.toLowerCase().includes(q));
+            matchesQuery = nameMatch || addressMatch || sportMatch;
+        }
+
+        return matchesSport && matchesQuery;
+    });
 
     return (
         <SafeAreaView className="flex-1 bg-appBg">
@@ -101,7 +115,7 @@ export default function SearchResultScreen() {
                 {/* Sub-header info */}
                 <View className="px-4 mt-4">
                     <Text className="text-sm text-appText/60">
-                        Tìm thấy {filteredCourts.length} sân {sportName ? sportName.toLowerCase() : ""} tại
+                        Tìm thấy {filteredCourts.length} kết quả cho {query ? `"${query}"` : sportName ? `sân ${sportName.toLowerCase()}` : "tất cả sân"}
                     </Text>
                     <View className="flex-row items-center gap-1 mt-1">
                         <Ionicons name="location-outline" size={16} color="#059669" />
@@ -147,9 +161,9 @@ export default function SearchResultScreen() {
                     <ScrollView className="flex-1 mt-4" contentContainerClassName="px-4 pb-8 gap-4" showsVerticalScrollIndicator={false}>
                         {filteredCourts.length === 0 ? (
                             <View className="items-center py-16">
-                                <Ionicons name="tennisball-outline" size={48} color={isDark ? "#475569" : "#94A3B8"} />
+                                <Ionicons name="search-outline" size={48} color={isDark ? "#475569" : "#94A3B8"} />
                                 <Text className="mt-3 text-sm text-appText/60 text-center">
-                                    Không tìm thấy sân {sportName ? sportName.toLowerCase() : ""} nào.
+                                    Không tìm thấy sân phù hợp với "{query || sportName}".
                                 </Text>
                             </View>
                         ) : (

@@ -129,6 +129,13 @@ export default function HomeScreen() {
     const isLoggedIn = !!token && !isGuest;
     const isLoading = status === "loading";
     const [activeFilter, setActiveFilter] = useState("Tất cả");
+    const [searchText, setSearchText] = useState("");
+
+    const handleSearch = () => {
+        if (searchText.trim()) {
+            navigation.navigate("Tìm Sân", { query: searchText.trim() });
+        }
+    };
 
     // Fetch courts và user profile khi component mount
     useEffect(() => {
@@ -213,6 +220,10 @@ export default function HomeScreen() {
                             placeholder="Tìm sân, môn thể thao..."
                             placeholderTextColor="#94A3B8"
                             className="flex-1 text-base text-appText"
+                            value={searchText}
+                            onChangeText={setSearchText}
+                            onSubmitEditing={handleSearch}
+                            returnKeyType="search"
                         />
                     </View>
                     <TouchableOpacity
