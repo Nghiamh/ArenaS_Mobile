@@ -1,4 +1,5 @@
-import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Alert, Image, ImageBackground } from "react-native";
+import { useEffect } from "react";
+import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Alert, Image, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
@@ -6,32 +7,115 @@ import { useDispatch, useSelector } from "react-redux";
 import { logout } from "../../auth/authSlice";
 import { removeItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
+import { fetchCourts } from "../venueSlice";
 
-const sports = [
-    { name: "Bóng đá", sessions: "24 sân", tone: "bg-[#1A4D63]", icon: "soccer", image: "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=400&auto=format&fit=crop" },
-    { name: "Cầu lông", sessions: "18 sân", tone: "bg-[#5B3D77]", icon: "badminton", image: "https://maythongdich.com/uploads/images/vi/news/cau-long-tieng-anh-la-gi.jpg" },
-    { name: "Tennis", sessions: "12 sân", tone: "bg-[#14532D]", icon: "tennis", image: "https://t4.ftcdn.net/jpg/08/29/43/35/360_F_829433527_Hesay9bs9UBS9gHNdpgIvZPCkgBOm3WK.jpg" },
-    { name: "Pickleball", sessions: "9 sân", tone: "bg-[#1D4ED8]", icon: "table-tennis", image: "https://img.freepik.com/premium-photo/orange-pickleball-ball-with-paddle-closeup-pickleball-court-with-space-text_600978-7575.jpg" },
-];
+// Mapping icon cho các loại sân (key = tên tiếng Anh từ BE)
+const SPORT_ICONS = {
+    "football": "soccer",
+    "badminton": "badminton",
+    "tennis": "tennis",
+    "pickleball": "table-tennis",
+    "basketball": "basketball",
+    "volleyball": "volleyball",
+    "default": "soccer",
+};
 
-const venues = [
-    {
-        name: "Arena Football",
-        address: "Quận 9, TP. Thủ Đức, TP. HCM",
-        price: "250.000đ/giờ",
-        rating: "4.8",
-        tags: ["Bóng đá"],
-        image: "https://media.istockphoto.com/id/2167969183/photo/ev-arena-kelab-sultan-sulaiman-at-night.jpg?s=612x612&w=0&k=20&c=kLbnsbeKQy5sTs99dmY82ktY28_TMZDe7wLj0PO42YI="
-    },
-    {
-        name: "Badminton Pro",
-        address: "Quận 9, TP. Thủ Đức, TP. HCM",
-        price: "180.000đ/giờ",
-        rating: "4.9",
-        tags: ["Cầu lông", "Pickleball"],
-        image: "https://sportnet.vn/uploads/venue/608/-album--1721641826.jpeg"
-    },
-];
+// Mapping màu nền cho từng loại sân
+const SPORT_TONES = {
+    "football": "bg-[#1A4D63]",
+    "badminton": "bg-[#5B3D77]",
+    "tennis": "bg-[#14532D]",
+    "pickleball": "bg-[#1D4ED8]",
+    "basketball": "bg-[#B45309]",
+    "volleyball": "bg-[#9333EA]",
+    "default": "bg-[#334155]",
+};
+
+// Mapping tên tiếng Việt
+const SPORT_NAMES_VI = {
+    "football": "Bóng đá",
+    "badminton": "Cầu lông",
+    "tennis": "Tennis",
+    "pickleball": "Pickleball",
+    "basketball": "Bóng rổ",
+    "volleyball": "Bóng chuyền",
+};
+
+// Placeholder image khi sân không có ảnh
+const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?q=80&w=400&auto=format&fit=crop";
+
+/**
+ * Helper: lấy icon name cho loại sân
+ */
+function getSportIcon(sportKey) {
+    if (!sportKey) return SPORT_ICONS.default;
+    return SPORT_ICONS[sportKey.toLowerCase()] || SPORT_ICONS.default;
+}
+
+/**
+ * Helper: lấy màu nền cho loại sân
+ */
+function getSportTone(sportKey) {
+    if (!sportKey) return SPORT_TONES.default;
+    return SPORT_TONES[sportKey.toLowerCase()] || SPORT_TONES.default;
+}
+
+/**
+ * Helper: lấy tên tiếng Việt cho sport
+ */
+function getSportNameVI(sportKey) {
+    if (!sportKey) return "Khác";
+    return SPORT_NAMES_VI[sportKey.toLowerCase()] || sportKey;
+}
+
+/**
+ * Helper: lấy ảnh đầu tiên từ court
+ */
+function getCourtImage(court) {
+    if (court.images && court.images.length > 0) return court.images[0];
+    if (court.image) return court.image;
+    if (court.thumbnail) return court.thumbnail;
+    return PLACEHOLDER_IMAGE;
+}
+
+/**
+ * Helper: format giá tiền
+ */
+function formatPrice(price) {
+    if (!price && price !== 0) return "Liên hệ";
+    const num = typeof price === "string" ? parseInt(price, 10) : price;
+    if (isNaN(num)) return price;
+    return num.toLocaleString("vi-VN") + "đ/giờ";
+}
+
+/**
+ * Helper: lấy sport chính của sân (BE trả sports: ["football"])
+ */
+function getCourtSport(court) {
+    if (court.sports && court.sports.length > 0) return court.sports[0];
+    return court.sport || court.sportType || court.type || court.category || "";
+}
+
+/**
+ * Helper: nhóm các sân theo loại thể thao (để hiển thị section "Môn thể thao")
+ */
+function groupBySport(courts) {
+    const sportMap = {};
+    courts.forEach((court) => {
+        // Mỗi sân có thể có nhiều sport
+        const sports = court.sports && court.sports.length > 0
+            ? court.sports
+            : [getCourtSport(court) || "other"];
+        sports.forEach((sport) => {
+            const key = sport.toLowerCase();
+            if (!sportMap[key]) {
+                sportMap[key] = { key, name: getSportNameVI(key), count: 0 };
+            }
+            sportMap[key].count++;
+        });
+    });
+    return Object.values(sportMap);
+}
 
 export default function HomeScreen() {
     const { colorScheme, toggleColorScheme } = useColorScheme();
@@ -40,8 +124,15 @@ export default function HomeScreen() {
     const navigation = useNavigation();
     const dispatch = useDispatch();
     const { token, isGuest } = useSelector((state) => state.auth);
+    const { venues: courts, status, error } = useSelector((state) => state.venue);
 
     const isLoggedIn = !!token && !isGuest;
+    const isLoading = status === "loading";
+
+    // Fetch courts khi component mount
+    useEffect(() => {
+        dispatch(fetchCourts());
+    }, [dispatch]);
 
     const handleLogout = async () => {
         await removeItem(STORAGE_KEYS.authToken);
@@ -49,6 +140,12 @@ export default function HomeScreen() {
         await removeItem("user");
         dispatch(logout());
     };
+
+    // Nhóm theo môn thể thao
+    const sportGroups = groupBySport(courts);
+
+    // Lấy tối đa 4 sân để hiển thị "Sân gần bạn"
+    const nearbyVenues = courts.slice(0, 4);
 
     return (
         <SafeAreaView className="flex-1 bg-appBg">
@@ -120,6 +217,7 @@ export default function HomeScreen() {
                     ))}
                 </ScrollView>
 
+                {/* ── Môn thể thao ── */}
                 <View className="mt-7 flex-row items-center justify-between">
                     <Text className="text-xl font-bold text-appText">Môn thể thao</Text>
                     <TouchableOpacity onPress={() => navigation.navigate("Tìm Sân")}>
@@ -127,78 +225,102 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                 </View>
 
-                <View className="mt-4 flex-row flex-wrap justify-between gap-3">
-                    {sports.map((item) => (
+                {isLoading && courts.length === 0 ? (
+                    <View className="mt-8 items-center">
+                        <ActivityIndicator size="large" color="#059669" />
+                        <Text className="mt-3 text-sm text-appText/60">Đang tải dữ liệu sân...</Text>
+                    </View>
+                ) : error ? (
+                    <View className="mt-8 items-center px-6">
+                        <Ionicons name="cloud-offline-outline" size={48} color={isDark ? "#475569" : "#94A3B8"} />
+                        <Text className="mt-3 text-sm text-appText/60 text-center">{error}</Text>
                         <TouchableOpacity
-                            key={item.name}
-                            onPress={() => navigation.navigate("Tìm Sân", { sport: item.name })}
-                            activeOpacity={0.8}
-                            className={`w-[48%] overflow-hidden rounded-3xl shadow-lg shadow-black/20 ${item.tone} min-h-[140px]`}
+                            onPress={() => dispatch(fetchCourts())}
+                            className="mt-4 rounded-full bg-emerald-700 px-6 py-2"
                         >
-                            <Image
-                                source={{ uri: item.image }}
-                                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
-                                className="opacity-50"
-                                resizeMode="cover"
-                            />
-                            <View className="flex-1 justify-between z-10 p-4">
-                                <View className="h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-sm">
-                                    <MaterialCommunityIcons name={item.icon} size={22} color="#000000" />
-                                </View>
-                                <View className="mt-8">
-                                    <Text className="text-xl font-bold text-white shadow-sm">{item.name}</Text>
-                                    <Text className="mt-1 text-sm font-medium text-white/90">{item.sessions}</Text>
-                                </View>
-                            </View>
+                            <Text className="text-sm font-bold text-white">Thử lại</Text>
                         </TouchableOpacity>
-                    ))}
-                </View>
-
-                <View className="mt-8 flex-row items-center justify-between">
-                    <Text className="text-xl font-bold text-appText">Sân gần bạn</Text>
-                    <TouchableOpacity onPress={() => navigation.navigate("Tìm Sân")}>
-                        <Text className="text-sm font-semibold text-emerald-300">Xem tất cả</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View className="mt-4 gap-4">
-                    {venues.map((venue) => (
-                        <TouchableOpacity
-                            key={venue.name}
-                            className="rounded-3xl bg-appSurface p-3 border border-appText/10"
-                            onPress={() => navigation.navigate("Đặt lịch")}
-                            activeOpacity={0.7}
-                        >
-                            <View className="flex-row gap-3">
-                                <Image
-                                    source={{ uri: venue.image }}
-                                    className="h-20 w-20 rounded-2xl bg-slate-200"
-                                    resizeMode="cover"
-                                />
-                                <View className="flex-1">
-                                    <View className="flex-row items-start justify-between gap-2">
-                                        <Text className="flex-1 text-base font-bold text-appText">{venue.name}</Text>
-                                        <Text className="text-sm font-semibold text-amber-300">★ {venue.rating}</Text>
-                                    </View>
-                                    <Text className="mt-1 text-xs text-appText/65">{venue.address}</Text>
-                                    <View className="mt-2 flex-row flex-wrap gap-2">
-                                        {venue.tags.map((tag) => (
-                                            <View key={tag} className="rounded-full bg-appText/5 px-2.5 py-1">
-                                                <Text className="text-[11px] text-appText/75">{tag}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                    <View className="mt-3 flex-row items-center justify-between gap-2">
-                                        <Text className="flex-1 text-sm font-bold text-emerald-400" numberOfLines={1}>{venue.price}</Text>
-                                        <View className="rounded-full bg-emerald-600 px-4 py-1.5 justify-center items-center">
-                                            <Text className="text-[13px] font-bold text-white">Đặt</Text>
+                    </View>
+                ) : (
+                    <>
+                        <View className="mt-4 flex-row flex-wrap justify-between gap-3">
+                            {sportGroups.map((sport) => (
+                                <TouchableOpacity
+                                    key={sport.key}
+                                    onPress={() => navigation.navigate("Tìm Sân", { sport: sport.key })}
+                                    activeOpacity={0.8}
+                                    className={`w-[48%] overflow-hidden rounded-3xl shadow-lg shadow-black/20 ${getSportTone(sport.key)} min-h-[140px]`}
+                                >
+                                    <View className="flex-1 justify-between z-10 p-4">
+                                        <View className="h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-sm">
+                                            <MaterialCommunityIcons name={getSportIcon(sport.key)} size={22} color="#000000" />
+                                        </View>
+                                        <View className="mt-8">
+                                            <Text className="text-xl font-bold text-white shadow-sm">{sport.name}</Text>
+                                            <Text className="mt-1 text-sm font-medium text-white/90">{sport.count} sân</Text>
                                         </View>
                                     </View>
-                                </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* ── Sân gần bạn ── */}
+                        <View className="mt-8 flex-row items-center justify-between">
+                            <Text className="text-xl font-bold text-appText">Sân gần bạn</Text>
+                            <TouchableOpacity onPress={() => navigation.navigate("Tìm Sân")}>
+                                <Text className="text-sm font-semibold text-emerald-300">Xem tất cả</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View className="mt-4 gap-4">
+                            {nearbyVenues.map((court) => (
+                                <TouchableOpacity
+                                    key={court._id || court.id}
+                                    className="rounded-3xl bg-appSurface p-3 border border-appText/10"
+                                    onPress={() => navigation.navigate("Đặt lịch", { courtId: court._id || court.id })}
+                                    activeOpacity={0.7}
+                                >
+                                    <View className="flex-row gap-3">
+                                        <Image
+                                            source={{ uri: getCourtImage(court) }}
+                                            className="h-20 w-20 rounded-2xl bg-slate-200"
+                                            resizeMode="cover"
+                                        />
+                                        <View className="flex-1">
+                                            <View className="flex-row items-start justify-between gap-2">
+                                                <Text className="flex-1 text-base font-bold text-appText">{court.name || "Sân không tên"}</Text>
+                                                <Text className="text-sm font-semibold text-amber-300">★ {court.avg_rating || court.rating || "N/A"}</Text>
+                                            </View>
+                                            <Text className="mt-1 text-xs text-appText/65">{court.location || court.address || ""}</Text>
+                                            <View className="mt-2 flex-row flex-wrap gap-2">
+                                                {(court.sports || []).map((s) => (
+                                                    <View key={s} className="rounded-full bg-appText/5 px-2.5 py-1">
+                                                        <Text className="text-[11px] text-appText/75">{getSportNameVI(s)}</Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                            <View className="mt-3 flex-row items-center justify-between gap-2">
+                                                <Text className="flex-1 text-sm font-bold text-emerald-400" numberOfLines={1}>
+                                                    {formatPrice(court.price_per_hour || court.price || court.pricePerHour)}
+                                                </Text>
+                                                <View className="rounded-full bg-emerald-600 px-4 py-1.5 justify-center items-center">
+                                                    <Text className="text-[13px] font-bold text-white">Đặt</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {courts.length === 0 && status === "succeeded" && (
+                            <View className="mt-8 items-center px-6">
+                                <Ionicons name="tennisball-outline" size={48} color={isDark ? "#475569" : "#94A3B8"} />
+                                <Text className="mt-3 text-sm text-appText/60 text-center">Chưa có sân nào được đăng ký.</Text>
                             </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                        )}
+                    </>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
