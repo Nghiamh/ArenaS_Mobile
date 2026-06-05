@@ -2,8 +2,10 @@ import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Aler
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { logout } from "../../auth/authSlice";
+import { removeItem } from "../../../utils/storage";
+import { STORAGE_KEYS } from "../../../constants/config";
 
 const sports = [
     { name: "Bóng đá", sessions: "24 sân", tone: "bg-[#1A4D63]", icon: "soccer", image: "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=400&auto=format&fit=crop" },
@@ -37,26 +39,45 @@ export default function HomeScreen() {
     const iconColor = isDark ? "#FFFFFF" : "#000000";
     const navigation = useNavigation();
     const dispatch = useDispatch();
+    const { token, isGuest } = useSelector((state) => state.auth);
+
+    const isLoggedIn = !!token && !isGuest;
+
+    const handleLogout = async () => {
+        await removeItem(STORAGE_KEYS.authToken);
+        await removeItem(STORAGE_KEYS.guestMode);
+        await removeItem("user");
+        dispatch(logout());
+    };
 
     return (
         <SafeAreaView className="flex-1 bg-appBg">
             <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10 pt-2">
                 <View className="flex-row items-center justify-end min-h-[48px] mb-2">
                     <View className="absolute inset-0 items-center justify-center z-0" pointerEvents="none">
-                        <Image 
-                            source={require('../../../../assets/Img/bannerNoBg.JPG.png')} 
+                        <Image
+                            source={require('../../../../assets/Img/bannerNoBg.JPG.png')}
                             className="h-28 w-64"
                             resizeMode="contain"
                         />
                     </View>
 
                     <View className="flex-row items-center gap-2 z-10">
-                        <TouchableOpacity
-                            onPress={() => dispatch(logout())}
-                            className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
-                        >
-                            <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
-                        </TouchableOpacity>
+                        {isLoggedIn ? (
+                            <TouchableOpacity
+                                onPress={handleLogout}
+                                className="h-9 px-3 items-center justify-center rounded-full bg-red-100 border border-red-200 dark:bg-red-900/30 dark:border-red-800"
+                            >
+                                {<Text className="text-xs font-bold text-red-600 dark:text-red-400">Đăng xuất</Text>}
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={handleLogout}
+                                className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
+                            >
+                                <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
+                            </TouchableOpacity>
+                        )}
                         <TouchableOpacity
                             onPress={toggleColorScheme}
                             className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
@@ -70,115 +91,115 @@ export default function HomeScreen() {
                     </View>
                 </View>
 
-            <View className="mt-5 flex-row items-center gap-3">
-                <View className="flex-1 flex-row items-center rounded-2xl border border-appText/10 bg-appSurface px-4 py-3">
-                    <Ionicons name="search-outline" size={20} color={isDark ? "#94A3B8" : "#64748B"} style={{ marginRight: 8 }} />
-                    <TextInput
-                        placeholder="Tìm sân, môn thể thao..."
-                        placeholderTextColor="#94A3B8"
-                        className="flex-1 text-base text-appText"
-                    />
-                </View>
-                <TouchableOpacity
-                    onPress={() => Alert.alert("Bộ lọc", "Tính năng lọc nâng cao đang phát triển.")}
-                    className="rounded-2xl bg-emerald-700 px-4 py-3"
-                >
-                    <Text className="font-semibold text-white">Lọc</Text>
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-5" contentContainerClassName="gap-3 pr-4">
-                {['Tất cả', 'Gần đây', 'Nổi bật', 'Mới'].map((item, index) => (
-                    <TouchableOpacity
-                        key={item}
-                        onPress={() => Alert.alert("Danh mục", `Đã chọn: ${item}`)}
-                        className={`rounded-full px-4 py-2 ${index === 0 ? 'bg-emerald-700' : 'bg-appSurface border border-appText/10'}`}
-                    >
-                        <Text className={`text-sm font-semibold ${index === 0 ? 'text-white' : 'text-appText/80'}`}>{item}</Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
-
-            <View className="mt-7 flex-row items-center justify-between">
-                <Text className="text-xl font-bold text-appText">Môn thể thao</Text>
-                <TouchableOpacity onPress={() => navigation.navigate("Tìm Sân")}>
-                    <Text className="text-sm font-semibold text-emerald-300">Xem tất cả ›</Text>
-                </TouchableOpacity>
-            </View>
-
-            <View className="mt-4 flex-row flex-wrap justify-between gap-3">
-                {sports.map((item) => (
-                    <TouchableOpacity
-                        key={item.name}
-                        onPress={() => navigation.navigate("Tìm Sân", { sport: item.name })}
-                        activeOpacity={0.8}
-                        className={`w-[48%] overflow-hidden rounded-3xl shadow-lg shadow-black/20 ${item.tone} min-h-[140px]`}
-                    >
-                        <Image
-                            source={{ uri: item.image }}
-                            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
-                            className="opacity-50"
-                            resizeMode="cover"
+                <View className="mt-5 flex-row items-center gap-3">
+                    <View className="flex-1 flex-row items-center rounded-2xl border border-appText/10 bg-appSurface px-4 py-3">
+                        <Ionicons name="search-outline" size={20} color={isDark ? "#94A3B8" : "#64748B"} style={{ marginRight: 8 }} />
+                        <TextInput
+                            placeholder="Tìm sân, môn thể thao..."
+                            placeholderTextColor="#94A3B8"
+                            className="flex-1 text-base text-appText"
                         />
-                        <View className="flex-1 justify-between z-10 p-4">
-                            <View className="h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-sm">
-                                <MaterialCommunityIcons name={item.icon} size={22} color="#000000" />
-                            </View>
-                            <View className="mt-8">
-                                <Text className="text-xl font-bold text-white shadow-sm">{item.name}</Text>
-                                <Text className="mt-1 text-sm font-medium text-white/90">{item.sessions}</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            <View className="mt-8 flex-row items-center justify-between">
-                <Text className="text-xl font-bold text-appText">Sân gần bạn</Text>
-                <TouchableOpacity onPress={() => navigation.navigate("Tìm Sân")}>
-                    <Text className="text-sm font-semibold text-emerald-300">Xem tất cả</Text>
-                </TouchableOpacity>
-            </View>
-
-            <View className="mt-4 gap-4">
-                {venues.map((venue) => (
+                    </View>
                     <TouchableOpacity
-                        key={venue.name}
-                        className="rounded-3xl bg-appSurface p-3 border border-appText/10"
-                        onPress={() => navigation.navigate("Đặt lịch")}
-                        activeOpacity={0.7}
+                        onPress={() => Alert.alert("Bộ lọc", "Tính năng lọc nâng cao đang phát triển.")}
+                        className="rounded-2xl bg-emerald-700 px-4 py-3"
                     >
-                        <View className="flex-row gap-3">
+                        <Text className="font-semibold text-white">Lọc</Text>
+                    </TouchableOpacity>
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-5" contentContainerClassName="gap-3 pr-4">
+                    {['Tất cả', 'Gần đây', 'Nổi bật', 'Mới'].map((item, index) => (
+                        <TouchableOpacity
+                            key={item}
+                            onPress={() => Alert.alert("Danh mục", `Đã chọn: ${item}`)}
+                            className={`rounded-full px-4 py-2 ${index === 0 ? 'bg-emerald-700' : 'bg-appSurface border border-appText/10'}`}
+                        >
+                            <Text className={`text-sm font-semibold ${index === 0 ? 'text-white' : 'text-appText/80'}`}>{item}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                <View className="mt-7 flex-row items-center justify-between">
+                    <Text className="text-xl font-bold text-appText">Môn thể thao</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate("Tìm Sân")}>
+                        <Text className="text-sm font-semibold text-emerald-300">Xem tất cả ›</Text>
+                    </TouchableOpacity>
+                </View>
+
+                <View className="mt-4 flex-row flex-wrap justify-between gap-3">
+                    {sports.map((item) => (
+                        <TouchableOpacity
+                            key={item.name}
+                            onPress={() => navigation.navigate("Tìm Sân", { sport: item.name })}
+                            activeOpacity={0.8}
+                            className={`w-[48%] overflow-hidden rounded-3xl shadow-lg shadow-black/20 ${item.tone} min-h-[140px]`}
+                        >
                             <Image
-                                source={{ uri: venue.image }}
-                                className="h-20 w-20 rounded-2xl bg-slate-200"
+                                source={{ uri: item.image }}
+                                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+                                className="opacity-50"
                                 resizeMode="cover"
                             />
-                            <View className="flex-1">
-                                <View className="flex-row items-start justify-between gap-2">
-                                    <Text className="flex-1 text-base font-bold text-appText">{venue.name}</Text>
-                                    <Text className="text-sm font-semibold text-amber-300">★ {venue.rating}</Text>
+                            <View className="flex-1 justify-between z-10 p-4">
+                                <View className="h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-sm">
+                                    <MaterialCommunityIcons name={item.icon} size={22} color="#000000" />
                                 </View>
-                                <Text className="mt-1 text-xs text-appText/65">{venue.address}</Text>
-                                <View className="mt-2 flex-row flex-wrap gap-2">
-                                    {venue.tags.map((tag) => (
-                                        <View key={tag} className="rounded-full bg-appText/5 px-2.5 py-1">
-                                            <Text className="text-[11px] text-appText/75">{tag}</Text>
+                                <View className="mt-8">
+                                    <Text className="text-xl font-bold text-white shadow-sm">{item.name}</Text>
+                                    <Text className="mt-1 text-sm font-medium text-white/90">{item.sessions}</Text>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <View className="mt-8 flex-row items-center justify-between">
+                    <Text className="text-xl font-bold text-appText">Sân gần bạn</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate("Tìm Sân")}>
+                        <Text className="text-sm font-semibold text-emerald-300">Xem tất cả</Text>
+                    </TouchableOpacity>
+                </View>
+
+                <View className="mt-4 gap-4">
+                    {venues.map((venue) => (
+                        <TouchableOpacity
+                            key={venue.name}
+                            className="rounded-3xl bg-appSurface p-3 border border-appText/10"
+                            onPress={() => navigation.navigate("Đặt lịch")}
+                            activeOpacity={0.7}
+                        >
+                            <View className="flex-row gap-3">
+                                <Image
+                                    source={{ uri: venue.image }}
+                                    className="h-20 w-20 rounded-2xl bg-slate-200"
+                                    resizeMode="cover"
+                                />
+                                <View className="flex-1">
+                                    <View className="flex-row items-start justify-between gap-2">
+                                        <Text className="flex-1 text-base font-bold text-appText">{venue.name}</Text>
+                                        <Text className="text-sm font-semibold text-amber-300">★ {venue.rating}</Text>
+                                    </View>
+                                    <Text className="mt-1 text-xs text-appText/65">{venue.address}</Text>
+                                    <View className="mt-2 flex-row flex-wrap gap-2">
+                                        {venue.tags.map((tag) => (
+                                            <View key={tag} className="rounded-full bg-appText/5 px-2.5 py-1">
+                                                <Text className="text-[11px] text-appText/75">{tag}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                    <View className="mt-3 flex-row items-center justify-between gap-2">
+                                        <Text className="flex-1 text-sm font-bold text-emerald-400" numberOfLines={1}>{venue.price}</Text>
+                                        <View className="rounded-full bg-emerald-600 px-4 py-1.5 justify-center items-center">
+                                            <Text className="text-[13px] font-bold text-white">Đặt</Text>
                                         </View>
-                                    ))}
-                                </View>
-                                <View className="mt-3 flex-row items-center justify-between gap-2">
-                                    <Text className="flex-1 text-sm font-bold text-emerald-400" numberOfLines={1}>{venue.price}</Text>
-                                    <View className="rounded-full bg-emerald-600 px-4 py-1.5 justify-center items-center">
-                                        <Text className="text-[13px] font-bold text-white">Đặt</Text>
                                     </View>
                                 </View>
                             </View>
-                        </View>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </ScrollView>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </ScrollView>
         </SafeAreaView>
     );
 }

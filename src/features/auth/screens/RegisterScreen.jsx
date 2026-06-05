@@ -1,59 +1,205 @@
-import React, { useState } from "react";
-import { ScrollView, Text, View, TouchableOpacity, TextInput, Image, ActivityIndicator, Alert } from "react-native";
-import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import React, { useState, useRef } from "react";
+import {
+    ScrollView,
+    Text,
+    View,
+    TouchableOpacity,
+    TextInput,
+    Image,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import authApi from "../../../api/authApi";
 
+// ── helpers ──────────────────────────────────────────────
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^(0|\+84)[0-9]{9,10}$/;
+
+function validateRegisterFields({ fullName, email, phone, password, confirmPassword, isAgreed }) {
+    const errors = {};
+
+    // Full name
+    const name = fullName.trim();
+    if (!name) {
+        errors.fullName = "Vui lòng nhập họ và tên.";
+    } else if (name.length < 2) {
+        errors.fullName = "Họ và tên phải có ít nhất 2 ký tự.";
+    }
+
+    // Email
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+        errors.email = "Vui lòng nhập email.";
+    } else if (!EMAIL_REGEX.test(trimmedEmail)) {
+        errors.email = "Email không đúng định dạng. VD: name@example.com";
+    }
+
+    // Phone
+    const trimmedPhone = phone.trim();
+    if (!trimmedPhone) {
+        errors.phone = "Vui lòng nhập số điện thoại.";
+    } else if (!PHONE_REGEX.test(trimmedPhone)) {
+        errors.phone = "Số điện thoại không hợp lệ. VD: 0912345678";
+    }
+
+    // Password
+    if (!password) {
+        errors.password = "Vui lòng nhập mật khẩu.";
+    } else if (password.length < 6) {
+        errors.password = "Mật khẩu phải có ít nhất 6 ký tự.";
+    }
+
+    // Confirm password
+    if (!confirmPassword) {
+        errors.confirmPassword = "Vui lòng xác nhận mật khẩu.";
+    } else if (password !== confirmPassword) {
+        errors.confirmPassword = "Mật khẩu xác nhận không khớp.";
+    }
+
+    // Terms
+    if (!isAgreed) {
+        errors.isAgreed = "Bạn cần đồng ý Điều khoản & Chính sách.";
+    }
+
+    return errors;
+}
+
+// ── component ────────────────────────────────────────────
 export default function RegisterScreen() {
     const navigation = useNavigation();
 
+    const emailRef = useRef(null);
+    const phoneRef = useRef(null);
+    const passwordRef = useRef(null);
+    const confirmRef = useRef(null);
+
     const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
+    const [phone, setPhone] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isAgreed, setIsAgreed] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    // ── handlers ─────────────────────────────────────────
+    const clearError = (key) => {
+        if (fieldErrors[key]) setFieldErrors((p) => ({ ...p, [key]: undefined }));
+    };
 
     const handleRegister = async () => {
-        if (!fullName || !email || !password || !confirmPassword) {
-            Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin.");
-            return;
-        }
+        const errors = validateRegisterFields({
+            fullName,
+            email,
+            phone,
+            password,
+            confirmPassword,
+            isAgreed,
+        });
+        setFieldErrors(errors);
 
-        if (password !== confirmPassword) {
-            Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp.");
-            return;
-        }
-
-        if (!isAgreed) {
-            Alert.alert("Lỗi", "Vui lòng đồng ý với Điều khoản dịch vụ và Chính sách bảo mật.");
-            return;
-        }
+        if (Object.keys(errors).length > 0) return;
 
         try {
             setIsLoading(true);
-            const response = await authApi.register({ name: fullName, email, password });
-            
+            await authApi.register({
+                name: fullName.trim(),
+                email: email.trim(),
+                phone: phone.trim(),
+                password,
+            });
+
             Alert.alert(
-                "Thành công", 
+                "Thành công",
                 "Đăng ký tài khoản thành công! Vui lòng đăng nhập.",
                 [{ text: "OK", onPress: () => navigation.navigate("Login") }]
             );
         } catch (error) {
             console.error("Register error:", error);
-            const errorMessage = error?.response?.data?.message || "Đăng ký thất bại. Vui lòng kiểm tra lại.";
+            const errorMessage =
+                error?.response?.data?.message || "Đăng ký thất bại. Vui lòng kiểm tra lại.";
             Alert.alert("Lỗi", errorMessage);
         } finally {
             setIsLoading(false);
         }
     };
 
+    // ── render helper: input row ─────────────────────────
+    const renderInput = ({
+        label,
+        icon,
+        value,
+        onChangeText,
+        placeholder,
+        errorKey,
+        inputRef,
+        nextRef,
+        secureTextEntry = false,
+        toggleSecure,
+        showSecure,
+        keyboardType = "default",
+        autoCapitalize = "none",
+    }) => (
+        <View>
+            <Text className="mb-2 text-[10px] font-bold text-gray-500 uppercase">{label}</Text>
+            <View
+                className={`flex-row items-center rounded-xl border ${
+                    fieldErrors[errorKey] ? "border-red-400" : "border-gray-200"
+                } bg-[#F8FAFC] px-3 py-3`}
+            >
+                <Ionicons name={icon} size={18} color="#64748B" />
+                <TextInput
+                    ref={inputRef}
+                    placeholder={placeholder}
+                    placeholderTextColor="#94A3B8"
+                    className="flex-1 ml-2 text-sm text-gray-800"
+                    autoCapitalize={autoCapitalize}
+                    keyboardType={keyboardType}
+                    secureTextEntry={secureTextEntry && !showSecure}
+                    returnKeyType={nextRef ? "next" : "done"}
+                    value={value}
+                    onChangeText={(v) => {
+                        onChangeText(v);
+                        clearError(errorKey);
+                    }}
+                    onSubmitEditing={() =>
+                        nextRef ? nextRef.current?.focus() : handleRegister()
+                    }
+                    blurOnSubmit={!nextRef}
+                />
+                {toggleSecure ? (
+                    <TouchableOpacity
+                        onPress={toggleSecure}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Ionicons
+                            name={showSecure ? "eye-off-outline" : "eye-outline"}
+                            size={18}
+                            color="#64748B"
+                        />
+                    </TouchableOpacity>
+                ) : null}
+            </View>
+            {fieldErrors[errorKey] ? (
+                <Text className="mt-1.5 text-xs text-red-500">{fieldErrors[errorKey]}</Text>
+            ) : null}
+        </View>
+    );
+
+    // ── render ───────────────────────────────────────────
     return (
         <View className="flex-1 bg-[#F2F7F4]">
+            {/* Header */}
             <View className="flex-row items-center justify-between px-5 pt-12 pb-4 bg-[#F2F7F4]">
                 <View className="flex-row items-center gap-2">
-                    <Image 
-                        source={require('../../../../assets/Img/logo.JPG.jpg')}
+                    <Image
+                        source={require("../../../../assets/Img/logo.JPG.jpg")}
                         style={{ width: 32, height: 32, borderRadius: 16 }}
                         resizeMode="cover"
                     />
@@ -64,115 +210,167 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView className="flex-1" contentContainerClassName="flex-grow px-5 pb-10" showsVerticalScrollIndicator={false}>
-                <View className="rounded-3xl bg-white p-6 shadow-sm shadow-black/5 mt-2">
-                    <View className="items-center mb-6">
-                        <Text className="text-2xl font-black text-gray-900">Tạo tài khoản</Text>
-                        <Text className="mt-2 text-center text-[13px] text-gray-500 px-4">
-                            Tham gia cộng đồng ArenaS để bắt đầu hành trình thể thao của bạn.
-                        </Text>
-                    </View>
-
-                    <View className="gap-4">
-                        <View>
-                            <Text className="mb-2 text-[10px] font-bold text-gray-500 uppercase">Họ và tên</Text>
-                            <View className="flex-row items-center rounded-xl border border-gray-200 bg-[#F8FAFC] px-3 py-3">
-                                <Ionicons name="person-outline" size={18} color="#64748B" />
-                                <TextInput 
-                                    placeholder="Nguyễn Văn A"
-                                    placeholderTextColor="#94A3B8"
-                                    className="flex-1 ml-2 text-sm text-gray-800"
-                                    value={fullName}
-                                    onChangeText={setFullName}
-                                />
-                            </View>
-                        </View>
-
-                        <View>
-                            <Text className="mb-2 text-[10px] font-bold text-gray-500 uppercase">Email / Số điện thoại</Text>
-                            <View className="flex-row items-center rounded-xl border border-gray-200 bg-[#F8FAFC] px-3 py-3">
-                                <Ionicons name="mail-outline" size={18} color="#64748B" />
-                                <TextInput 
-                                    placeholder="example@gmail.com"
-                                    placeholderTextColor="#94A3B8"
-                                    className="flex-1 ml-2 text-sm text-gray-800"
-                                    autoCapitalize="none"
-                                    value={email}
-                                    onChangeText={setEmail}
-                                />
-                            </View>
-                        </View>
-
-                        <View>
-                            <Text className="mb-2 text-[10px] font-bold text-gray-500 uppercase">Mật khẩu</Text>
-                            <View className="flex-row items-center rounded-xl border border-gray-200 bg-[#F8FAFC] px-3 py-3">
-                                <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
-                                <TextInput 
-                                    placeholder="••••••••"
-                                    placeholderTextColor="#94A3B8"
-                                    secureTextEntry
-                                    className="flex-1 mx-2 text-sm text-gray-800"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                />
-                                <Ionicons name="eye-outline" size={18} color="#64748B" />
-                            </View>
-                        </View>
-
-                        <View>
-                            <Text className="mb-2 text-[10px] font-bold text-gray-500 uppercase">Xác nhận mật khẩu</Text>
-                            <View className="flex-row items-center rounded-xl border border-gray-200 bg-[#F8FAFC] px-3 py-3">
-                                <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" />
-                                <TextInput 
-                                    placeholder="••••••••"
-                                    placeholderTextColor="#94A3B8"
-                                    secureTextEntry
-                                    className="flex-1 ml-2 text-sm text-gray-800"
-                                    value={confirmPassword}
-                                    onChangeText={setConfirmPassword}
-                                />
-                            </View>
-                        </View>
-
-                        <View className="flex-row items-start mt-2 pr-2">
-                            <TouchableOpacity className="mt-0.5" onPress={() => setIsAgreed(!isAgreed)}>
-                                <Ionicons 
-                                    name={isAgreed ? "checkbox" : "square-outline"} 
-                                    size={18} 
-                                    color={isAgreed ? "#007F3F" : "#94A3B8"} 
-                                />
-                            </TouchableOpacity>
-                            <Text className="ml-2 flex-1 text-[11px] text-gray-500 leading-relaxed">
-                                Tôi đồng ý với <Text className="font-bold text-[#007F3F]">Điều khoản dịch vụ</Text> và <Text className="font-bold text-[#007F3F]">Chính sách bảo mật</Text>.
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                className="flex-1"
+            >
+                <ScrollView
+                    className="flex-1"
+                    contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40 }}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View className="rounded-3xl bg-white p-6 shadow-sm shadow-black/5 mt-2">
+                        {/* Title */}
+                        <View className="items-center mb-6">
+                            <Text className="text-2xl font-black text-gray-900">Tạo tài khoản</Text>
+                            <Text className="mt-2 text-center text-[13px] text-gray-500 px-4">
+                                Tham gia cộng đồng ArenaS để bắt đầu hành trình thể thao của bạn.
                             </Text>
                         </View>
 
-                        <TouchableOpacity 
-                            onPress={handleRegister}
-                            disabled={isLoading}
-                            className={`mt-4 flex-row rounded-xl py-3.5 shadow-sm items-center justify-center gap-1 ${isLoading ? 'bg-gray-400' : 'bg-[#22C55E] shadow-green-500/30'}`}
-                        >
-                            {isLoading ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <>
-                                    <Text className="text-sm font-bold text-white">Đăng ký</Text>
-                                    <Ionicons name="arrow-forward" size={16} color="white" />
-                                </>
-                            )}
-                        </TouchableOpacity>
+                        <View className="gap-4">
+                            {/* Full Name */}
+                            {renderInput({
+                                label: "Họ và tên",
+                                icon: "person-outline",
+                                value: fullName,
+                                onChangeText: setFullName,
+                                placeholder: "Nguyễn Văn A",
+                                errorKey: "fullName",
+                                nextRef: emailRef,
+                                autoCapitalize: "words",
+                            })}
 
-                        <View className="h-px w-full bg-gray-200 my-4" />
+                            {/* Email */}
+                            {renderInput({
+                                label: "Email",
+                                icon: "mail-outline",
+                                value: email,
+                                onChangeText: setEmail,
+                                placeholder: "example@gmail.com",
+                                errorKey: "email",
+                                inputRef: emailRef,
+                                nextRef: phoneRef,
+                                keyboardType: "email-address",
+                            })}
 
-                        <View className="items-center gap-1.5">
-                            <Text className="text-[11px] text-gray-500">Đã có tài khoản?</Text>
-                            <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-                                <Text className="text-xs font-bold text-[#007F3F]">Quay lại trang Đăng nhập</Text>
+                            {/* Phone */}
+                            {renderInput({
+                                label: "Số điện thoại",
+                                icon: "call-outline",
+                                value: phone,
+                                onChangeText: setPhone,
+                                placeholder: "0912 345 678",
+                                errorKey: "phone",
+                                inputRef: phoneRef,
+                                nextRef: passwordRef,
+                                keyboardType: "phone-pad",
+                            })}
+
+                            {/* Password */}
+                            {renderInput({
+                                label: "Mật khẩu",
+                                icon: "lock-closed-outline",
+                                value: password,
+                                onChangeText: setPassword,
+                                placeholder: "••••••••",
+                                errorKey: "password",
+                                inputRef: passwordRef,
+                                nextRef: confirmRef,
+                                secureTextEntry: true,
+                                showSecure: showPassword,
+                                toggleSecure: () => setShowPassword(!showPassword),
+                            })}
+
+                            {/* Confirm Password */}
+                            {renderInput({
+                                label: "Xác nhận mật khẩu",
+                                icon: "shield-checkmark-outline",
+                                value: confirmPassword,
+                                onChangeText: setConfirmPassword,
+                                placeholder: "••••••••",
+                                errorKey: "confirmPassword",
+                                inputRef: confirmRef,
+                                secureTextEntry: true,
+                                showSecure: showConfirmPassword,
+                                toggleSecure: () => setShowConfirmPassword(!showConfirmPassword),
+                            })}
+
+                            {/* Terms checkbox */}
+                            <View>
+                                <View className="flex-row items-start mt-2 pr-2">
+                                    <TouchableOpacity
+                                        className="mt-0.5"
+                                        onPress={() => {
+                                            setIsAgreed(!isAgreed);
+                                            clearError("isAgreed");
+                                        }}
+                                    >
+                                        <Ionicons
+                                            name={isAgreed ? "checkbox" : "square-outline"}
+                                            size={18}
+                                            color={isAgreed ? "#007F3F" : "#94A3B8"}
+                                        />
+                                    </TouchableOpacity>
+                                    <Text className="ml-2 flex-1 text-[11px] text-gray-500 leading-relaxed">
+                                        Tôi đồng ý với{" "}
+                                        <Text className="font-bold text-[#007F3F]">
+                                            Điều khoản dịch vụ
+                                        </Text>{" "}
+                                        và{" "}
+                                        <Text className="font-bold text-[#007F3F]">
+                                            Chính sách bảo mật
+                                        </Text>
+                                        .
+                                    </Text>
+                                </View>
+                                {fieldErrors.isAgreed ? (
+                                    <Text className="mt-1.5 ml-6 text-xs text-red-500">
+                                        {fieldErrors.isAgreed}
+                                    </Text>
+                                ) : null}
+                            </View>
+
+                            {/* Submit */}
+                            <TouchableOpacity
+                                onPress={handleRegister}
+                                disabled={isLoading}
+                                activeOpacity={0.85}
+                                className={`mt-4 flex-row rounded-xl py-3.5 shadow-sm items-center justify-center gap-1 ${
+                                    isLoading
+                                        ? "bg-gray-400"
+                                        : "bg-[#22C55E] shadow-green-500/30"
+                                }`}
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <>
+                                        <Text className="text-sm font-bold text-white">
+                                            Đăng ký
+                                        </Text>
+                                        <Ionicons name="arrow-forward" size={16} color="white" />
+                                    </>
+                                )}
                             </TouchableOpacity>
+
+                            {/* Divider */}
+                            <View className="h-px w-full bg-gray-200 my-4" />
+
+                            {/* Already have account */}
+                            <View className="items-center gap-1.5">
+                                <Text className="text-[11px] text-gray-500">Đã có tài khoản?</Text>
+                                <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+                                    <Text className="text-xs font-bold text-[#007F3F]">
+                                        Quay lại trang Đăng nhập
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </ScrollView>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }

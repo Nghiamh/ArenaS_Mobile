@@ -3,9 +3,11 @@ import axios from "axios";
 import { API_BASE_URL, STORAGE_KEYS } from "../constants/config";
 import { getItem, removeItem } from "../utils/storage";
 
+console.log("[axiosClient] BASE URL =", API_BASE_URL);
+
 const axiosClient = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 15000,
+    timeout: 60000,
     headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
