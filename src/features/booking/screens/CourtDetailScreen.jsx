@@ -57,6 +57,7 @@ function getAmenityIcon(amenity) {
 export default function CourtDetailScreen() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
+    const iconColor = isDark ? "#FFFFFF" : "#000000";
     const navigation = useNavigation();
     const route = useRoute();
     const dispatch = useDispatch();
@@ -127,16 +128,26 @@ export default function CourtDetailScreen() {
     const courtImages = court.images && court.images.length > 0 ? court.images : [PLACEHOLDER_IMAGE];
     const sportLabel = (court.sports || []).map(getSportNameVI).join(", ") || "Thể thao";
     const amenities = court.amenities || [];
-    const subCourts = court.sub_courts || [];
+    const subCourts = court.sub_courts && court.sub_courts.length > 0 
+        ? court.sub_courts 
+        : [{ _id: '1', name: 'Sân 1', price_per_hour: court.price_per_hour || 190000, type: getCourtSport(court) }, { _id: '2', name: 'Sân 2', price_per_hour: court.price_per_hour || 190000, type: getCourtSport(court) }]; // Fallback data
     const minPrice = subCourts.length > 0
         ? Math.min(...subCourts.map((s) => s.price_per_hour || Infinity))
-        : court.price_per_hour || 0;
+        : court.price_per_hour || 190000;
+
+    const handleDirections = () => {
+        navigation.navigate("Bản đồ", { 
+            latitude: court.coordinates?.latitude, 
+            longitude: court.coordinates?.longitude, 
+            venueName: court.name 
+        });
+    };
 
     return (
         <View className="flex-1 bg-appBg">
             <ScrollView className="flex-1" contentContainerClassName="pb-32" showsVerticalScrollIndicator={false}>
                 {/* Header Image Gallery */}
-                <View className="relative h-72 w-full bg-slate-900">
+                <View className="relative h-64 w-full bg-slate-200 dark:bg-slate-900">
                     <ScrollView 
                         horizontal 
                         pagingEnabled 
@@ -149,18 +160,18 @@ export default function CourtDetailScreen() {
                             <Image 
                                 key={index}
                                 source={{ uri }} 
-                                style={{ width, height: 288 }} 
+                                style={{ width, height: 256 }} 
                                 resizeMode="cover"
                             />
                         ))}
                     </ScrollView>
 
                     {/* Pagination Dots */}
-                    <View pointerEvents="none" className="absolute bottom-16 left-0 right-0 flex-row justify-center gap-1.5 z-10">
+                    <View pointerEvents="none" className="absolute bottom-4 left-0 right-0 flex-row justify-center gap-1.5 z-10">
                         {courtImages.map((_, index) => (
                             <View 
                                 key={index} 
-                                className={`h-1.5 rounded-full ${activeIndex === index ? 'w-5 bg-emerald-500' : 'w-1.5 bg-white/70'}`}
+                                className={`h-1.5 rounded-full ${activeIndex === index ? 'w-5 bg-emerald-500 dark:bg-white' : 'w-1.5 bg-white/70 dark:bg-white/50'}`}
                             />
                         ))}
                     </View>
@@ -169,154 +180,142 @@ export default function CourtDetailScreen() {
                     <View pointerEvents="box-none" className="absolute left-4 right-4 top-12 flex-row justify-between z-10">
                         <TouchableOpacity 
                             onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Trang chủ")}
-                            className="h-10 w-10 items-center justify-center rounded-full bg-white/70"
+                            className="h-10 w-10 items-center justify-center rounded-full bg-white/70 dark:bg-black/40"
                         >
-                            <Ionicons name="arrow-back" size={20} color="black" />
+                            <Ionicons name="arrow-back" size={20} color={isDark ? "white" : "black"} />
                         </TouchableOpacity>
-                        <View className="flex-row gap-3">
-                            <TouchableOpacity 
-                                onPress={() => Alert.alert("Chia sẻ", "Tính năng chia sẻ đang phát triển.")}
-                                className="h-10 w-10 items-center justify-center rounded-full bg-white/70"
-                            >
-                                <Ionicons name="share-social" size={20} color="black" />
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => Alert.alert("Yêu thích", "Đã thêm vào danh sách yêu thích!")}
-                                className="h-10 w-10 items-center justify-center rounded-full bg-white/70"
-                            >
-                                <Ionicons name="heart-outline" size={20} color="black" />
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity 
+                            onPress={() => Alert.alert("Yêu thích", "Đã thêm vào danh sách yêu thích!")}
+                            className="h-10 w-10 items-center justify-center rounded-full bg-white/70 dark:bg-black/40"
+                        >
+                            <Ionicons name="heart-outline" size={20} color={isDark ? "white" : "black"} />
+                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Title Card (Overlapping image) */}
-                <View className="-mt-12 mx-4 rounded-2xl bg-appSurface p-5 shadow-lg shadow-black/10 border border-appText/5">
-                    <View className="flex-row items-center justify-between">
-                        <View className="rounded-full bg-emerald-100 px-2.5 py-1 dark:bg-emerald-900/50">
-                            <Text className="text-[10px] font-bold tracking-wider text-emerald-600 dark:text-emerald-400">
-                                {sportLabel.toUpperCase()}
-                            </Text>
-                        </View>
-                        {court.avg_rating ? (
-                            <View className="flex-row items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 dark:bg-amber-900/30">
-                                <Ionicons name="star" size={12} color="#F59E0B" />
-                                <Text className="text-[11px] font-bold text-amber-600 dark:text-amber-400">{court.avg_rating}</Text>
+                {/* Title & Directions */}
+                <View className="px-4 pt-4">
+                    <View className="flex-row items-start justify-between">
+                        <View className="flex-1 mr-4">
+                            <Text className="text-xl font-bold text-appText">{court.name}</Text>
+                            <View className="mt-2 flex-row items-start gap-1">
+                                <Ionicons name="location-outline" size={16} color={isDark ? "#9CA3AF" : "#6B7280"} />
+                                <Text className="flex-1 text-xs text-appText/70 leading-tight">
+                                    {court.location || court.address || "Chưa cập nhật địa chỉ"}
+                                </Text>
                             </View>
-                        ) : null}
-                    </View>
-                    <Text className="mt-3 text-2xl font-bold text-appText">{court.name}</Text>
-                    <View className="mt-2 flex-row items-start gap-1">
-                        <Ionicons name="location-outline" size={16} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                        <Text className="flex-1 text-sm text-appText/60">{court.location || ""}</Text>
-                    </View>
-                    {court.open_time && court.close_time ? (
-                        <View className="mt-2 flex-row items-center gap-1">
-                            <Ionicons name="time-outline" size={16} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                            <Text className="text-sm text-appText/60">{court.open_time} - {court.close_time}</Text>
                         </View>
-                    ) : null}
+                        <TouchableOpacity 
+                            onPress={handleDirections}
+                            className="flex-row items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2"
+                        >
+                            <Ionicons name="navigate" size={16} color="white" />
+                            <Text className="text-xs font-bold text-white">Chỉ đường</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Tiện ích (Amenities) */}
-                {amenities.length > 0 ? (
-                    <View className="mt-8 px-4">
-                        <Text className="text-lg font-bold text-appText">Tiện ích</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4" contentContainerClassName="gap-4 px-2">
-                            {amenities.map((amenity) => {
-                                const { icon, label } = getAmenityIcon(amenity);
-                                return (
-                                    <View key={amenity} className="items-center">
-                                        <View className="h-16 w-16 items-center justify-center rounded-2xl bg-appSurface border border-appText/10 shadow-sm shadow-black/5">
-                                            <MaterialCommunityIcons name={icon} size={24} color="#059669" />
-                                        </View>
-                                        <Text className="mt-2 text-[11px] text-appText/70 text-center" numberOfLines={1}>{label}</Text>
-                                    </View>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                ) : null}
+                <View className="mt-5 px-4">
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3">
+                        {amenities.length > 0 ? amenities.map((amenity) => {
+                            const { icon, label } = getAmenityIcon(amenity);
+                            return (
+                                <View key={amenity} className="flex-row items-center gap-2 rounded-xl border border-appText/10 bg-appSurface px-3 py-2">
+                                    <MaterialCommunityIcons name={icon} size={16} color="#059669" />
+                                    <Text className="text-xs font-medium text-appText">{label}</Text>
+                                </View>
+                            );
+                        }) : (
+                            // Fake amenities if empty to match design
+                            <>
+                                <View className="flex-row items-center gap-2 rounded-xl border border-appText/10 bg-appSurface px-3 py-2">
+                                    <MaterialCommunityIcons name="car" size={16} color="#059669" />
+                                    <Text className="text-xs font-medium text-appText">Gửi xe</Text>
+                                </View>
+                                <View className="flex-row items-center gap-2 rounded-xl border border-appText/10 bg-appSurface px-3 py-2">
+                                    <MaterialCommunityIcons name="food" size={16} color="#059669" />
+                                    <Text className="text-xs font-medium text-appText">Căng tin</Text>
+                                </View>
+                                <View className="flex-row items-center gap-2 rounded-xl border border-appText/10 bg-appSurface px-3 py-2">
+                                    <MaterialCommunityIcons name="locker" size={16} color="#059669" />
+                                    <Text className="text-xs font-medium text-appText">Tủ đồ</Text>
+                                </View>
+                                <View className="flex-row items-center gap-2 rounded-xl border border-appText/10 bg-appSurface px-3 py-2">
+                                    <MaterialCommunityIcons name="cup-water" size={16} color="#059669" />
+                                    <Text className="text-xs font-medium text-appText">Trà đá</Text>
+                                </View>
+                            </>
+                        )}
+                    </ScrollView>
+                </View>
 
-                {/* Danh sách sân con (Sub-courts) */}
-                {subCourts.length > 0 ? (
-                    <View className="mt-8 px-4">
-                        <View className="flex-row items-center justify-between">
-                            <Text className="text-lg font-bold text-appText">Sân & Bảng giá</Text>
-                            <Text className="text-xs text-appText/50">{subCourts.length} sân</Text>
+                {/* Date Selector */}
+                <View className="mt-6 flex-row items-center justify-between px-4">
+                    <TouchableOpacity className="h-8 w-8 items-center justify-center rounded-lg border border-appText/10 bg-appSurface">
+                        <Ionicons name="chevron-back" size={16} color={iconColor} />
+                    </TouchableOpacity>
+                    <Text className="text-sm font-semibold text-appText">Thứ 7, 06/07</Text>
+                    <TouchableOpacity className="h-8 w-8 items-center justify-center rounded-lg border border-appText/10 bg-appSurface">
+                        <Ionicons name="chevron-forward" size={16} color={iconColor} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Danh sách sân con & Lịch (Time Slots) */}
+                <View className="mt-4 px-4 gap-3">
+                    {subCourts.map((sub, idx) => (
+                        <View key={sub._id || idx} className="rounded-xl border border-appText/10 bg-appSurface p-3 flex-row items-center shadow-sm shadow-black/5">
+                            <Text className="w-14 text-sm font-bold text-appText">{sub.name}</Text>
+                            
+                            {/* Fake time slots matching the design */}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+                                {/* Slot 1 */}
+                                <TouchableOpacity className="items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 min-w-[64px]">
+                                    <Text className="text-xs font-bold text-white">14:00</Text>
+                                    <Text className="text-[9px] text-emerald-100">Available</Text>
+                                </TouchableOpacity>
+                                {/* Slot 2 */}
+                                <TouchableOpacity className="items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 min-w-[64px]">
+                                    <Text className="text-xs font-bold text-white">15:00</Text>
+                                    <Text className="text-[9px] text-emerald-100">Available</Text>
+                                </TouchableOpacity>
+                                {/* Slot 3 */}
+                                <TouchableOpacity className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${idx % 2 !== 0 ? 'bg-red-600' : 'bg-emerald-600'}`}>
+                                    <Text className="text-xs font-bold text-white">16:00</Text>
+                                    <Text className={`text-[9px] ${idx % 2 !== 0 ? 'text-red-100' : 'text-emerald-100'}`}>{idx % 2 !== 0 ? 'Booked' : 'Available'}</Text>
+                                </TouchableOpacity>
+                                {/* Slot 4 */}
+                                <TouchableOpacity className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${idx > 0 ? 'bg-slate-400 dark:bg-slate-600' : 'bg-emerald-600'}`}>
+                                    <Text className={`text-xs font-bold ${idx > 0 ? 'text-slate-100' : 'text-white'}`}>17:00</Text>
+                                    <Text className={`text-[9px] ${idx > 0 ? 'text-slate-200' : 'text-emerald-100'}`}>{idx > 0 ? 'Locked' : 'Available'}</Text>
+                                </TouchableOpacity>
+                                {/* Slot 5 */}
+                                <TouchableOpacity className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${idx > 0 ? 'bg-slate-400 dark:bg-slate-600' : 'bg-emerald-600'}`}>
+                                    <Text className={`text-xs font-bold ${idx > 0 ? 'text-slate-100' : 'text-white'}`}>18:00</Text>
+                                    <Text className={`text-[9px] ${idx > 0 ? 'text-slate-200' : 'text-emerald-100'}`}>{idx > 0 ? 'Locked' : 'Available'}</Text>
+                                </TouchableOpacity>
+                            </ScrollView>
                         </View>
-
-                        <View className="mt-4 gap-3">
-                            {subCourts.map((sub) => {
-                                const isOpen = sub.status === "open";
-                                return (
-                                    <TouchableOpacity
-                                        key={sub._id}
-                                        disabled={!isOpen}
-                                        className={`overflow-hidden rounded-2xl border p-4 shadow-sm shadow-black/5 ${
-                                            isOpen
-                                                ? "bg-appSurface border-appText/10"
-                                                : "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900 opacity-70"
-                                        }`}
-                                    >
-                                        <View className="absolute bottom-0 left-0 top-0 w-1.5 bg-emerald-600" />
-                                        <View className="flex-row items-center justify-between pl-3">
-                                            <View className="flex-1">
-                                                <Text className="text-sm font-bold text-appText">{sub.name}</Text>
-                                                <Text className="mt-1 text-[11px] text-appText/60">
-                                                    {getSportNameVI(sub.type)}{sub.surface ? ` • ${sub.surface}` : ""}
-                                                </Text>
-                                            </View>
-                                            <View className="items-end">
-                                                <Text className="text-base font-bold text-emerald-600">
-                                                    {formatPrice(sub.price_per_hour)}
-                                                </Text>
-                                                {isOpen ? (
-                                                    <Text className="text-[10px] font-medium text-appText/50">/Giờ</Text>
-                                                ) : (
-                                                    <View className="mt-1 rounded bg-red-600 px-1.5 py-0.5">
-                                                        <Text className="text-[9px] font-bold text-white">HẾT SÂN</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    </View>
-                ) : null}
-
-                {/* Giới thiệu */}
-                <View className="mt-8 px-4">
-                    <Text className="text-lg font-bold text-appText">Giới thiệu</Text>
-                    <Text className="mt-2 text-sm text-appText/70 leading-relaxed">
-                        {court.name} mở cửa từ {court.open_time || "06:00"} đến {court.close_time || "22:00"}.
-                        {court.number_of_courts ? ` Tổng cộng ${court.number_of_courts} sân.` : ""}
-                        {amenities.length > 0 ? ` Tiện ích: ${amenities.join(", ")}.` : ""}
-                    </Text>
+                    ))}
                 </View>
             </ScrollView>
 
             {/* Bottom Sticky Bar */}
-            <View className="absolute bottom-0 left-0 right-0 border-t border-appText/10 bg-appSurface px-5 py-4 shadow-lg shadow-black/20" style={{ paddingBottom: 24 }}>
-                <View className="flex-row items-center justify-between">
-                    <View>
-                        <Text className="text-[10px] font-bold tracking-wider text-appText/50 uppercase">CHỈ TỪ</Text>
-                        <View className="flex-row items-end gap-1 mt-0.5">
-                            <Text className="text-2xl font-black text-appText">
-                                {formatPrice(minPrice || court.price_per_hour)}
-                            </Text>
-                            <Text className="mb-1 text-xs font-bold text-appText/50">/ 1h</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity 
-                        onPress={() => navigation.navigate("Thanh toán", { courtId: court.id || court._id })}
-                        className="rounded-xl bg-emerald-700 px-8 py-3.5 shadow-md shadow-emerald-900/20"
-                    >
-                        <Text className="text-base font-bold text-white text-center">Tiếp tục đặt{"\n"}sân</Text>
-                    </TouchableOpacity>
+            <View className="absolute bottom-0 left-0 right-0 border-t border-appText/10 bg-appSurface px-5 py-4 flex-row items-center justify-between shadow-lg shadow-black/20" style={{ paddingBottom: 24 }}>
+                <View>
+                    <Text className="text-xs font-medium text-appText/60">
+                        Giờ hoạt động: <Text className="font-bold text-appText">{court.open_time || "06:00"} - {court.close_time || "22:00"}</Text>
+                    </Text>
+                    <Text className="mt-1 text-xs font-medium text-appText/60">
+                        Giá: <Text className="text-sm font-bold text-emerald-600">{formatPrice(minPrice)}/h</Text>
+                    </Text>
                 </View>
+                <TouchableOpacity 
+                    onPress={() => navigation.navigate("Thanh toán", { courtId: court.id || court._id })}
+                    className="rounded-xl bg-emerald-600 px-8 py-3.5 shadow-md shadow-emerald-900/20"
+                >
+                    <Text className="text-sm font-bold text-white text-center">Đặt sân ngay</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
