@@ -1,13 +1,77 @@
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useDispatch, useSelector } from "react-redux";
+import { logout, fetchUserProfile } from "../../auth/authSlice";
+import { removeItem } from "../../../utils/storage";
+import { STORAGE_KEYS } from "../../../constants/config";
+import React from "react";
 
 export default function ProfileScreen() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const iconColor = isDark ? "#FFFFFF" : "#000000";
     const navigation = useNavigation();
+    const dispatch = useDispatch();
+
+    const { user, isGuest } = useSelector((state) => state.auth);
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Fetch user profile when entering the screen
+    useFocusEffect(
+        React.useCallback(() => {
+            if (!isGuest && user?.id !== "guest") {
+                setIsLoading(true);
+                dispatch(fetchUserProfile()).finally(() => {
+                    setIsLoading(false);
+                });
+            }
+        }, [dispatch, isGuest])
+    );
+
+    const handleLogout = async () => {
+        Alert.alert(
+            "Đăng xuất",
+            "Bạn có chắc chắn muốn đăng xuất?",
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Đăng xuất",
+                    style: "destructive",
+                    onPress: async () => {
+                        await removeItem(STORAGE_KEYS.authToken);
+                        await removeItem(STORAGE_KEYS.guestMode);
+                        await removeItem("user");
+                        dispatch(logout());
+                        // Có thể cần điều hướng về màn hình đăng nhập nếu app không tự reload
+                    }
+                }
+            ]
+        );
+    };
+
+    if (isGuest || !user) {
+        return (
+            <View className="flex-1 bg-appBg items-center justify-center px-6">
+                <Ionicons name="person-circle-outline" size={64} color={isDark ? "#475569" : "#94A3B8"} />
+                <Text className="mt-4 text-base text-appText/70 text-center">
+                    Bạn đang sử dụng ứng dụng với tư cách Khách. Vui lòng đăng nhập để xem hồ sơ và quản lý đặt sân.
+                </Text>
+                <TouchableOpacity
+                    onPress={handleLogout}
+                    className="mt-6 rounded-full bg-emerald-600 px-8 py-3"
+                >
+                    <Text className="text-sm font-bold text-white">Đăng nhập ngay</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    const userName = user.name || user.fullName || user.username || "Thành viên";
+    const userEmail = user.email || "Chưa cập nhật email";
+    const userAvatar = user.avatarUrl || user.avatar || user.profilePicture || "https://i.pravatar.cc/150?img=11";
 
     return (
         <ScrollView className="flex-1 bg-appBg" contentContainerClassName="px-4 pt-12 pb-10">
@@ -29,34 +93,65 @@ export default function ProfileScreen() {
             <View className="mt-6 flex-row items-center">
                 <View className="relative">
                     <Image
-                        source={{ uri: "https://i.pravatar.cc/150?img=11" }}
-                        className="h-16 w-16 rounded-full"
+                        source={{ uri: userAvatar }}
+                        className="h-16 w-16 rounded-full bg-slate-200"
                     />
                     <View className="absolute bottom-0 right-0 rounded-full bg-emerald-500 p-0.5 border-2 border-appBg">
                         <MaterialCommunityIcons name="check-decagram" size={14} color="white" />
                     </View>
                 </View>
                 <View className="ml-4 flex-1">
-                    <Text className="text-xl font-bold text-appText">Nguyễn Văn A</Text>
-                    <Text className="text-sm text-appText/60">Hội viên Vàng • ID: #AS2024</Text>
+                    {isLoading ? (
+                        <View className="flex-row items-center gap-2">
+                            <ActivityIndicator size="small" color="#059669" />
+                            <Text className="text-sm text-appText/60">Đang cập nhật...</Text>
+                        </View>
+                    ) : (
+                        <>
+                            <Text className="text-xl font-bold text-appText">{userName}</Text>
+                            <Text className="text-sm text-appText/60">{userEmail}</Text>
+                        </>
+                    )}
                 </View>
                 <TouchableOpacity
-                    onPress={() => Alert.alert("Cài đặt", "Chuyển đến trang cài đặt tài khoản.")}
+                    onPress={() => navigation.navigate("Chỉnh sửa hồ sơ")}
                     className="h-10 w-10 items-center justify-center rounded-xl bg-appSurface border border-appText/10"
                 >
                     <Ionicons name="settings-outline" size={20} color={iconColor} />
                 </TouchableOpacity>
             </View>
 
+            {/* Additional Info */}
+            {!isLoading && user && (
+                <View className="mt-4 rounded-2xl bg-appSurface p-4 border border-appText/10 shadow-sm shadow-black/5">
+                    <View className="flex-row items-center justify-between py-2 border-b border-appText/5">
+                        <Text className="text-sm font-semibold text-appText/70">Số điện thoại</Text>
+                        <Text className="text-sm text-appText">{user.phone || "Chưa cập nhật"}</Text>
+                    </View>
+                    <View className="flex-row items-center justify-between py-2 border-b border-appText/5">
+                        <Text className="text-sm font-semibold text-appText/70">Ngày sinh</Text>
+                        <Text className="text-sm text-appText">
+                            {user.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString("vi-VN") : "Chưa cập nhật"}
+                        </Text>
+                    </View>
+                    <View className="flex-row items-center justify-between py-2">
+                        <Text className="text-sm font-semibold text-appText/70">Địa chỉ</Text>
+                        <Text className="text-sm text-appText text-right flex-1 ml-4" numberOfLines={2}>
+                            {user.address || "Chưa cập nhật"}
+                        </Text>
+                    </View>
+                </View>
+            )}
+
             {/* Stats Card */}
             <View className="mt-6 flex-row rounded-2xl bg-appSurface p-4 border border-appText/10 shadow-sm shadow-black/5">
                 <View className="flex-1 items-center border-r border-appText/10">
                     <Text className="text-xs font-medium text-appText/60">ĐIỂM TÍCH LŨY</Text>
-                    <Text className="mt-1 text-lg font-bold text-emerald-600">2,450 pts</Text>
+                    <Text className="mt-1 text-lg font-bold text-emerald-600">0 pts</Text>
                 </View>
                 <View className="flex-1 items-center">
                     <Text className="text-xs font-medium text-appText/60">ĐÃ ĐẶT SÂN</Text>
-                    <Text className="mt-1 text-lg font-bold text-appText">18 buổi</Text>
+                    <Text className="mt-1 text-lg font-bold text-appText">0 buổi</Text>
                 </View>
             </View>
 
@@ -79,113 +174,18 @@ export default function ProfileScreen() {
                 </View>
             </View>
 
-            {/* Bookings List */}
+            {/* Bookings List (Placeholder) */}
             <View className="mt-4 gap-4">
-                {/* Upcoming */}
-                <TouchableOpacity
-                    onPress={() => navigation.navigate("Đặt lịch")}
-                    activeOpacity={0.8}
-                    className="overflow-hidden rounded-2xl bg-appSurface border border-appText/10 shadow-sm shadow-black/5"
-                >
-                    <View className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-600" />
-                    <View className="p-4 pl-5">
-                        <View className="flex-row justify-between">
-                            <View className="flex-row gap-3">
-                                <View className="h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
-                                    <MaterialCommunityIcons name="soccer" size={20} color="#059669" />
-                                </View>
-                                <View>
-                                    <Text className="text-base font-bold text-appText">Sân bóng Đại học Y</Text>
-                                    <Text className="text-xs text-appText/60">Sân 7 • Khu A</Text>
-                                </View>
-                            </View>
-                            <View className="rounded bg-emerald-500/10 px-2 py-1 self-start">
-                                <Text className="text-[10px] font-bold text-emerald-600">SẮP TỚI</Text>
-                            </View>
-                        </View>
-                        <View className="mt-4 flex-row items-center justify-between">
-                            <View className="flex-row items-center gap-4">
-                                <View className="flex-row items-center gap-1">
-                                    <Ionicons name="calendar-outline" size={14} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                                    <Text className="text-xs text-appText/70">15/05/2024</Text>
-                                </View>
-                                <View className="flex-row items-center gap-1">
-                                    <Ionicons name="time-outline" size={14} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                                    <Text className="text-xs text-appText/70">18:00 - 19:30</Text>
-                                </View>
-                            </View>
-                            <Text className="text-base font-bold text-emerald-600">250k</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-
-                {/* Completed */}
-                <TouchableOpacity
-                    onPress={() => navigation.navigate("Đặt lịch")}
-                    activeOpacity={0.8}
-                    className="rounded-2xl bg-appSurface p-4 border border-appText/10 shadow-sm shadow-black/5"
-                >
-                    <View className="flex-row justify-between">
-                        <View className="flex-row gap-3">
-                            <View className="h-10 w-10 items-center justify-center rounded-full bg-appText/5">
-                                <MaterialCommunityIcons name="tennis" size={20} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                            </View>
-                            <View>
-                                <Text className="text-base font-bold text-appText">Tennis Phú Thọ</Text>
-                                <Text className="text-xs text-appText/60">Sân ngoài trời 03</Text>
-                            </View>
-                        </View>
-                        <View className="rounded bg-appText/5 px-2 py-1 self-start">
-                            <Text className="text-[10px] font-bold text-appText/60">HOÀN THÀNH</Text>
-                        </View>
-                    </View>
-                    <View className="mt-4 flex-row items-center justify-between">
-                        <View className="flex-row items-center gap-4">
-                            <View className="flex-row items-center gap-1">
-                                <Ionicons name="calendar-outline" size={14} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                                <Text className="text-xs text-appText/70">12/05/2024</Text>
-                            </View>
-                            <View className="flex-row items-center gap-1">
-                                <Ionicons name="time-outline" size={14} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                                <Text className="text-xs text-appText/70">08:00 - 09:00</Text>
-                            </View>
-                        </View>
-                        <Text className="text-base font-bold text-appText">150k</Text>
-                    </View>
-                </TouchableOpacity>
-
-                {/* Cancelled */}
-                <TouchableOpacity
-                    onPress={() => navigation.navigate("Đặt lịch")}
-                    activeOpacity={0.8}
-                    className="rounded-2xl bg-appSurface p-4 border border-appText/10 shadow-sm shadow-black/5"
-                >
-                    <View className="flex-row justify-between">
-                        <View className="flex-row gap-3">
-                            <View className="h-10 w-10 items-center justify-center rounded-full bg-appText/5">
-                                <MaterialCommunityIcons name="badminton" size={20} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                            </View>
-                            <View>
-                                <Text className="text-base font-bold text-appText/70">Cầu lông Bình Thạnh</Text>
-                                <Text className="text-xs text-appText/50">Sân tập 02</Text>
-                            </View>
-                        </View>
-                        <View className="rounded bg-red-500/10 px-2 py-1 self-start">
-                            <Text className="text-[10px] font-bold text-red-500">ĐÃ HỦY</Text>
-                        </View>
-                    </View>
-                    <View className="mt-4 flex-row items-center justify-between">
-                        <View className="flex-row items-center gap-4">
-                            <View className="flex-row items-center gap-1">
-                                <Ionicons name="calendar-outline" size={14} color={isDark ? "#9CA3AF" : "#6B7280"} />
-                                <Text className="text-xs text-appText/50">10/05/2024</Text>
-                            </View>
-                        </View>
-                        <TouchableOpacity onPress={() => navigation.navigate("Sân đấu")}>
-                            <Text className="text-sm font-semibold text-emerald-600">Đặt lại</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
+                <View className="items-center py-8 rounded-2xl bg-appSurface border border-appText/10 shadow-sm shadow-black/5">
+                    <Ionicons name="calendar-outline" size={40} color={isDark ? "#475569" : "#94A3B8"} />
+                    <Text className="mt-2 text-sm text-appText/60">Chưa có đơn đặt sân nào</Text>
+                    <TouchableOpacity 
+                        onPress={() => navigation.navigate("Trang chủ")}
+                        className="mt-4 rounded-full bg-emerald-100 px-6 py-2 dark:bg-emerald-900/30"
+                    >
+                        <Text className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Đặt sân ngay</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Quick Actions */}
@@ -198,13 +198,23 @@ export default function ProfileScreen() {
                     <Text className="mt-2 text-sm font-medium text-appText">Hỗ trợ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    onPress={() => Alert.alert("Ví tiền", "Số dư hiện tại: 0đ")}
+                    onPress={() => navigation.navigate("Ví tiền")}
                     className="flex-1 items-center justify-center rounded-2xl bg-appSurface py-5 border border-appText/10 shadow-sm shadow-black/5"
                 >
                     <Ionicons name="wallet-outline" size={24} color="#059669" />
                     <Text className="mt-2 text-sm font-medium text-appText">Ví tiền</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Nút Đăng Xuất */}
+            <TouchableOpacity
+                onPress={handleLogout}
+                className="mt-8 flex-row items-center justify-center rounded-2xl bg-red-100 py-4 dark:bg-red-900/20"
+            >
+                <Ionicons name="log-out-outline" size={20} color="#EF4444" style={{ marginRight: 8 }} />
+                <Text className="text-base font-bold text-red-500">Đăng xuất tài khoản</Text>
+            </TouchableOpacity>
+
         </ScrollView>
     );
 }

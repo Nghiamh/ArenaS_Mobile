@@ -7,6 +7,12 @@ const authApi = {
     register: (data) => {
         return axiosClient.post("/api/auth/register", data);
     },
+    getProfile: () => {
+        return axiosClient.get("/api/profile/me");
+    },
+    updateProfile: (data) => {
+        return axiosClient.put("/api/profile/me", data);
+    },
 };
 
 export default authApi;

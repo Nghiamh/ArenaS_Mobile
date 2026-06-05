@@ -4,7 +4,7 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { logout } from "../../auth/authSlice";
+import { logout, fetchUserProfile } from "../../auth/authSlice";
 import { removeItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
 import { fetchCourts } from "../venueSlice";
@@ -123,24 +123,20 @@ export default function HomeScreen() {
     const iconColor = isDark ? "#FFFFFF" : "#000000";
     const navigation = useNavigation();
     const dispatch = useDispatch();
-    const { token, isGuest } = useSelector((state) => state.auth);
+    const { token, isGuest, user } = useSelector((state) => state.auth);
     const { venues: courts, status, error } = useSelector((state) => state.venue);
 
     const isLoggedIn = !!token && !isGuest;
     const isLoading = status === "loading";
     const [activeFilter, setActiveFilter] = useState("Tất cả");
 
-    // Fetch courts khi component mount
+    // Fetch courts và user profile khi component mount
     useEffect(() => {
         dispatch(fetchCourts());
-    }, [dispatch]);
-
-    const handleLogout = async () => {
-        await removeItem(STORAGE_KEYS.authToken);
-        await removeItem(STORAGE_KEYS.guestMode);
-        await removeItem("user");
-        dispatch(logout());
-    };
+        if (isLoggedIn) {
+            dispatch(fetchUserProfile());
+        }
+    }, [dispatch, isLoggedIn]);
 
     // Nhóm theo môn thể thao
     const sportGroups = groupBySport(courts);
@@ -178,21 +174,25 @@ export default function HomeScreen() {
                     </View>
 
                     <View className="flex-row items-center gap-2 z-10">
-                        {isLoggedIn ? (
+                        {!isLoggedIn && (
                             <TouchableOpacity
-                                onPress={handleLogout}
-                                className="h-9 px-3 items-center justify-center rounded-full bg-red-100 border border-red-200 dark:bg-red-900/30 dark:border-red-800"
-                            >
-                                {<Text className="text-xs font-bold text-red-600 dark:text-red-400">Đăng xuất</Text>}
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity
-                                onPress={handleLogout}
+                                onPress={() => navigation.navigate("Đăng nhập")}
                                 className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
                             >
                                 <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
                             </TouchableOpacity>
                         )}
+                        {isLoggedIn ? (
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate("Hồ sơ")}
+                                className="h-9 w-9 overflow-hidden rounded-full border border-emerald-500"
+                            >
+                                <Image
+                                    source={{ uri: user?.avatarUrl || user?.avatar || user?.profilePicture || "https://i.pravatar.cc/150?img=11" }}
+                                    className="h-full w-full bg-slate-200"
+                                />
+                            </TouchableOpacity>
+                        ) : null}
                         <TouchableOpacity
                             onPress={toggleColorScheme}
                             className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
