@@ -6,6 +6,8 @@ import HomeScreen from "../features/discovery/screens/HomeScreen";
 import SearchResultScreen from "../features/discovery/screens/SearchResultScreen";
 import CourtDetailScreen from "../features/booking/screens/CourtDetailScreen";
 import ProfileScreen from "../features/discovery/screens/ProfileScreen";
+import EditProfileScreen from "../features/discovery/screens/EditProfileScreen";
+import WalletScreen from "../features/discovery/screens/WalletScreen";
 import PaymentScreen from "../features/booking/screens/PaymentScreen";
 
 const Tab = createBottomTabNavigator();
@@ -50,6 +52,22 @@ export default function MainTab() {
             <Tab.Screen 
                 name="Thanh toán" 
                 component={PaymentScreen} 
+                options={{ 
+                    tabBarButton: () => null, 
+                    tabBarItemStyle: { display: 'none' } 
+                }} 
+            />
+            <Tab.Screen 
+                name="Chỉnh sửa hồ sơ" 
+                component={EditProfileScreen} 
+                options={{ 
+                    tabBarButton: () => null, 
+                    tabBarItemStyle: { display: 'none' } 
+                }} 
+            />
+            <Tab.Screen 
+                name="Ví tiền" 
+                component={WalletScreen} 
                 options={{ 
                     tabBarButton: () => null, 
                     tabBarItemStyle: { display: 'none' } 
