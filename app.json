@@ -28,7 +28,8 @@
       "expo-font",
       "expo-asset",
       "@react-native-community/datetimepicker",
-      "@rnmapbox/maps"
+      "@rnmapbox/maps",
+      "expo-web-browser"
     ]
   }
 }

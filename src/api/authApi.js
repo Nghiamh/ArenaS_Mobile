@@ -13,6 +13,9 @@ const authApi = {
     updateProfile: (data) => {
         return axiosClient.put("/api/profile/me", data);
     },
+    googleLogin: (data) => {
+        return axiosClient.post("/api/auth/google", data);
+    },
 };
 
 export default authApi;

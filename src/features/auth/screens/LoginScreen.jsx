@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
     ScrollView,
     Text,
@@ -19,6 +19,22 @@ import { setGuestMode, setCredentials } from "../authSlice";
 import { setItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
 import authApi from "../../../api/authApi";
+import * as WebBrowser from "expo-web-browser";
+import {
+    useAuthRequest,
+    makeRedirectUri,
+    ResponseType,
+    exchangeCodeAsync,
+} from "expo-auth-session";
+
+WebBrowser.maybeCompleteAuthSession();
+
+// ── Google OAuth discovery ───────────────────────────────
+const googleDiscovery = {
+    authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenEndpoint: "https://oauth2.googleapis.com/token",
+    revocationEndpoint: "https://oauth2.googleapis.com/revoke",
+};
 
 // ── helpers ──────────────────────────────────────────────
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -54,6 +70,78 @@ export default function LoginScreen() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+    // ── Google Auth (core expo-auth-session) ─────────────
+    const redirectUri = makeRedirectUri();
+
+    const [googleRequest, googleResponse, promptGoogleAsync] = useAuthRequest(
+        {
+            clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+            redirectUri,
+            scopes: ["openid", "profile", "email"],
+            responseType: ResponseType.Code,
+        },
+        googleDiscovery
+    );
+
+    useEffect(() => {
+        if (googleResponse?.type === "success" && googleResponse.params.code) {
+            exchangeCodeAndLogin(googleResponse.params.code);
+        }
+    }, [googleResponse]);
+
+    const exchangeCodeAndLogin = async (code) => {
+        try {
+            setIsGoogleLoading(true);
+            // Exchange authorization code for tokens (client-side at Google)
+            const tokenResult = await exchangeCodeAsync(
+                {
+                    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+                    code,
+                    redirectUri,
+                    extraParams: {
+                        code_verifier: googleRequest?.codeVerifier || "",
+                    },
+                },
+                googleDiscovery
+            );
+
+            if (tokenResult.idToken) {
+                // Send idToken to our BE for verification
+                await handleGoogleLogin(tokenResult.idToken);
+            } else {
+                Alert.alert("Lỗi", "Không thể lấy thông tin xác thực từ Google.");
+            }
+        } catch (error) {
+            console.error("Google code exchange error:", error);
+            Alert.alert("Lỗi", "Đăng nhập Google thất bại. Vui lòng thử lại.");
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
+
+    const handleGoogleLogin = async (idToken) => {
+        try {
+            setIsGoogleLoading(true);
+            const response = await authApi.googleLogin({ idToken });
+            const { token, user } = response.data;
+
+            if (token) {
+                await setItem(STORAGE_KEYS.authToken, token);
+                await setItem("user", JSON.stringify(user));
+                dispatch(setCredentials({ user, token }));
+            }
+        } catch (error) {
+            console.error("Google login error:", error);
+            const errorMessage =
+                error.response?.data?.message ||
+                "Đăng nhập Google thất bại. Vui lòng thử lại.";
+            Alert.alert("Lỗi", errorMessage);
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
 
     // ── handlers ─────────────────────────────────────────
     const handleLogin = async () => {
@@ -148,9 +236,8 @@ export default function LoginScreen() {
                                 Email hoặc số điện thoại
                             </Text>
                             <View
-                                className={`flex-row items-center rounded-xl border ${
-                                    fieldErrors.email ? "border-red-400" : "border-gray-200"
-                                } bg-[#F8FAFC] px-3 py-3`}
+                                className={`flex-row items-center rounded-xl border ${fieldErrors.email ? "border-red-400" : "border-gray-200"
+                                    } bg-[#F8FAFC] px-3 py-3`}
                             >
                                 <Ionicons name="person-outline" size={18} color="#64748B" />
                                 <TextInput
@@ -184,9 +271,8 @@ export default function LoginScreen() {
                                 </TouchableOpacity>
                             </View>
                             <View
-                                className={`flex-row items-center rounded-xl border ${
-                                    fieldErrors.password ? "border-red-400" : "border-gray-200"
-                                } bg-[#F8FAFC] px-3 py-3`}
+                                className={`flex-row items-center rounded-xl border ${fieldErrors.password ? "border-red-400" : "border-gray-200"
+                                    } bg-[#F8FAFC] px-3 py-3`}
                             >
                                 <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
                                 <TextInput
@@ -223,9 +309,8 @@ export default function LoginScreen() {
                             onPress={handleLogin}
                             disabled={isLoading}
                             activeOpacity={0.85}
-                            className={`rounded-xl py-3.5 shadow-sm items-center justify-center ${
-                                isLoading ? "bg-gray-400" : "bg-[#00522B] shadow-green-900/20"
-                            }`}
+                            className={`rounded-xl py-3.5 shadow-sm items-center justify-center ${isLoading ? "bg-gray-400" : "bg-[#00522B] shadow-green-900/20"
+                                }`}
                         >
                             {isLoading ? (
                                 <ActivityIndicator color="white" />
@@ -246,13 +331,22 @@ export default function LoginScreen() {
                         {/* ── Social ── */}
                         <View className="flex-row gap-3 mb-2">
                             <TouchableOpacity
+                                onPress={() => promptGoogleAsync()}
+                                disabled={!googleRequest || isGoogleLoading || isLoading}
                                 activeOpacity={0.7}
-                                className="flex-1 flex-row items-center justify-center rounded-xl border border-gray-200 bg-white py-2.5"
+                                className={`flex-1 flex-row items-center justify-center rounded-xl border border-gray-200 py-2.5 ${!googleRequest || isGoogleLoading ? "bg-gray-100" : "bg-white"
+                                    }`}
                             >
-                                <Ionicons name="logo-google" size={18} color="#4285F4" />
-                                <Text className="ml-2 text-[13px] font-bold text-gray-700">
-                                    Google
-                                </Text>
+                                {isGoogleLoading ? (
+                                    <ActivityIndicator size="small" color="#4285F4" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="logo-google" size={18} color="#4285F4" />
+                                        <Text className="ml-2 text-[13px] font-bold text-gray-700">
+                                            Google
+                                        </Text>
+                                    </>
+                                )}
                             </TouchableOpacity>
                             <TouchableOpacity
                                 activeOpacity={0.7}
