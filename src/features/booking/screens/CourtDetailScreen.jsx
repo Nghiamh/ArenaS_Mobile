@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Dimensions, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Dimensions, ActivityIndicator, Modal, FlatList } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCourtById } from "../../discovery/venueSlice";
+import { setCheckoutDraft } from "../bookingSlice";
+import bookingApi from "../../../api/bookingApi";
 
 const { width } = Dimensions.get("window");
 
@@ -54,6 +56,13 @@ function getAmenityIcon(amenity) {
     return AMENITY_ICONS[key] || { icon: "check-circle-outline", label: amenity };
 }
 
+function formatLocalYYYYMMDD(dateObj) {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
 export default function CourtDetailScreen() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
@@ -62,10 +71,47 @@ export default function CourtDetailScreen() {
     const route = useRoute();
     const dispatch = useDispatch();
     const [activeIndex, setActiveIndex] = useState(0);
+    const [showCalendar, setShowCalendar] = useState(false);
+
+    const [selectedDate, setSelectedDate] = useState(formatLocalYYYYMMDD(new Date()));
+    const [slotsData, setSlotsData] = useState([]);
+    const [isFetchingSlots, setIsFetchingSlots] = useState(false);
+    const [isLocking, setIsLocking] = useState(false);
+    
+    const [selectedSubCourt, setSelectedSubCourt] = useState(null);
+    const [selectedSlotIndices, setSelectedSlotIndices] = useState([]);
 
     const courtId = route.params?.courtId;
     const { selectedVenue: court, status, error } = useSelector((state) => state.venue);
     const isLoading = status === "loading";
+
+    // Helper: Tạo slots client-side dựa trên giờ mở/đóng cửa (giống BE)
+    const generateClientSlots = (openTime = "06:00", closeTime = "22:00") => {
+        const slots = [];
+        const [startH, startM] = openTime.split(":").map(Number);
+        const [endH, endM] = closeTime.split(":").map(Number);
+        let current = startH * 60 + startM;
+        const end = endH * 60 + endM;
+        while (current + 30 <= end) {
+            const h1 = String(Math.floor(current / 60)).padStart(2, "0");
+            const m1 = String(current % 60).padStart(2, "0");
+            const next = current + 30;
+            const h2 = String(Math.floor(next / 60)).padStart(2, "0");
+            const m2 = String(next % 60).padStart(2, "0");
+            slots.push({ start: `${h1}:${m1}`, end: `${h2}:${m2}`, status: "available" });
+            current = next;
+        }
+        return slots;
+    };
+
+    // Lấy mảng slots hiển thị cho 1 sub_court (ưu tiên BE data, fallback client-side)
+    const getSlotsForSubCourt = (subCourtId) => {
+        const doc = slotsData.find(s => s.sub_court_id === subCourtId);
+        if (doc && doc.slots && doc.slots.length > 0) return doc.slots;
+        // BE chưa generate → hiển thị tất cả "available" dựa trên giờ mở cửa
+        if (court) return generateClientSlots(court.open_time, court.close_time);
+        return [];
+    };
 
     // Fetch court detail khi có courtId
     useEffect(() => {
@@ -73,6 +119,95 @@ export default function CourtDetailScreen() {
             dispatch(fetchCourtById(courtId));
         }
     }, [courtId, dispatch]);
+
+    // Fetch slots khi đổi ngày; reset selection
+    useEffect(() => {
+        setSelectedSubCourt(null);
+        setSelectedSlotIndices([]);
+        if (courtId && selectedDate) {
+            setIsFetchingSlots(true);
+            bookingApi.getCourtSlots(courtId, selectedDate)
+                .then(res => setSlotsData(res.data || []))
+                .catch(err => console.log("Lỗi lấy slots:", err))
+                .finally(() => setIsFetchingSlots(false));
+        }
+    }, [courtId, selectedDate]);
+
+    const handleSlotClick = (subCourtId, index, slot) => {
+        if (slot.status !== "available") return;
+        
+        if (selectedSubCourt !== subCourtId) {
+            setSelectedSubCourt(subCourtId);
+            setSelectedSlotIndices([index]);
+        } else {
+            if (selectedSlotIndices.includes(index)) {
+                setSelectedSlotIndices(prev => prev.filter(i => i !== index));
+            } else {
+                setSelectedSlotIndices(prev => [...prev, index].sort((a, b) => a - b));
+            }
+        }
+    };
+
+    const handleBookNow = async () => {
+        if (!selectedSubCourt || selectedSlotIndices.length === 0) {
+            Alert.alert("Lỗi", "Vui lòng chọn ít nhất 1 khung giờ.");
+            return;
+        }
+
+        // Check if contiguous
+        for (let i = 0; i < selectedSlotIndices.length - 1; i++) {
+            if (selectedSlotIndices[i + 1] - selectedSlotIndices[i] !== 1) {
+                Alert.alert("Lỗi", "Vui lòng chọn các khung giờ liền kề nhau.");
+                return;
+            }
+        }
+
+        const sub = subCourts.find(s => s._id === selectedSubCourt);
+        const slots = getSlotsForSubCourt(selectedSubCourt);
+        const selectedSlots = selectedSlotIndices.map(i => slots[i]);
+        
+        const startTime = selectedSlots[0].start;
+        const endTime = selectedSlots[selectedSlots.length - 1].end;
+        const price = (sub.price_per_hour || court.price_per_hour || 0) / 2 * selectedSlotIndices.length;
+
+        // ── Bước 1: Lock slots trước khi chuyển sang thanh toán ──
+        try {
+            setIsLocking(true);
+            await bookingApi.lockSlots({
+                court_id: court._id || court.id,
+                sub_court_id: sub._id,
+                date: selectedDate,
+                start_time: startTime,
+                end_time: endTime,
+            });
+        } catch (err) {
+            const msg = err.response?.data?.error || err.response?.data?.message || "Không thể giữ chỗ. Khung giờ có thể đã được đặt.";
+            Alert.alert("Lỗi", msg);
+            // Refresh lại slots
+            bookingApi.getCourtSlots(courtId, selectedDate)
+                .then(res => setSlotsData(res.data || []))
+                .catch(() => {});
+            setSelectedSlotIndices([]);
+            setIsLocking(false);
+            return;
+        } finally {
+            setIsLocking(false);
+        }
+
+        // ── Bước 2: Lưu thông tin vào Redux và chuyển sang Thanh toán ──
+        dispatch(setCheckoutDraft({
+            courtId: court._id || court.id,
+            courtName: court.name,
+            subCourtId: sub._id,
+            subCourtName: sub.name,
+            date: selectedDate,
+            startTime,
+            endTime,
+            totalPrice: price
+        }));
+
+        navigation.navigate("Thanh toán");
+    };
 
     const onScroll = (event) => {
         const slideSize = event.nativeEvent.layoutMeasurement.width;
@@ -252,51 +387,156 @@ export default function CourtDetailScreen() {
 
                 {/* Date Selector */}
                 <View className="mt-6 flex-row items-center justify-between px-4">
-                    <TouchableOpacity className="h-8 w-8 items-center justify-center rounded-lg border border-appText/10 bg-appSurface">
+                    <TouchableOpacity 
+                        onPress={() => {
+                            const d = new Date(selectedDate + 'T00:00:00');
+                            d.setDate(d.getDate() - 1);
+                            const todayStr = formatLocalYYYYMMDD(new Date());
+                            const newDateStr = formatLocalYYYYMMDD(d);
+                            if (newDateStr >= todayStr) setSelectedDate(newDateStr);
+                        }}
+                        className="h-8 w-8 items-center justify-center rounded-lg border border-appText/10 bg-appSurface">
                         <Ionicons name="chevron-back" size={16} color={iconColor} />
                     </TouchableOpacity>
-                    <Text className="text-sm font-semibold text-appText">Thứ 7, 06/07</Text>
-                    <TouchableOpacity className="h-8 w-8 items-center justify-center rounded-lg border border-appText/10 bg-appSurface">
+                    <TouchableOpacity onPress={() => setShowCalendar(true)} className="flex-row items-center gap-2 px-4 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800">
+                        <Ionicons name="calendar-outline" size={16} color="#059669" />
+                        <Text className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{new Date(selectedDate + 'T00:00:00').toLocaleDateString("vi-VN", { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        onPress={() => {
+                            const d = new Date(selectedDate + 'T00:00:00');
+                            d.setDate(d.getDate() + 1);
+                            setSelectedDate(formatLocalYYYYMMDD(d));
+                        }}
+                        className="h-8 w-8 items-center justify-center rounded-lg border border-appText/10 bg-appSurface">
                         <Ionicons name="chevron-forward" size={16} color={iconColor} />
                     </TouchableOpacity>
                 </View>
 
+                {/* Calendar Modal */}
+                <Modal visible={showCalendar} transparent animationType="fade" onRequestClose={() => setShowCalendar(false)}>
+                    <TouchableOpacity activeOpacity={1} onPress={() => setShowCalendar(false)} className="flex-1 bg-black/50 justify-center items-center px-6">
+                        <TouchableOpacity activeOpacity={1} className="bg-white dark:bg-slate-800 rounded-2xl p-5 w-full">
+                            {(() => {
+                                const current = new Date(selectedDate + 'T00:00:00');
+                                const year = current.getFullYear();
+                                const month = current.getMonth();
+                                const today = new Date();
+                                today.setHours(0,0,0,0);
+                                const firstDay = new Date(year, month, 1).getDay();
+                                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                const days = [];
+                                for (let i = 0; i < firstDay; i++) days.push(null);
+                                for (let i = 1; i <= daysInMonth; i++) days.push(i);
+                                const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+                                return (
+                                    <>
+                                        <View className="flex-row items-center justify-between mb-4">
+                                            <TouchableOpacity onPress={() => {
+                                                const prev = new Date(year, month - 1, 1);
+                                                setSelectedDate(formatLocalYYYYMMDD(prev));
+                                            }}>
+                                                <Ionicons name="chevron-back" size={22} color={isDark ? '#fff' : '#333'} />
+                                            </TouchableOpacity>
+                                            <Text className="text-base font-bold text-appText">{monthNames[month]} {year}</Text>
+                                            <TouchableOpacity onPress={() => {
+                                                const next = new Date(year, month + 1, 1);
+                                                setSelectedDate(formatLocalYYYYMMDD(next));
+                                            }}>
+                                                <Ionicons name="chevron-forward" size={22} color={isDark ? '#fff' : '#333'} />
+                                            </TouchableOpacity>
+                                        </View>
+                                        <View className="flex-row justify-between mb-2">
+                                            {['CN','T2','T3','T4','T5','T6','T7'].map(d => (
+                                                <Text key={d} className="w-[14%] text-center text-xs font-bold text-appText/50">{d}</Text>
+                                            ))}
+                                        </View>
+                                        <View className="flex-row flex-wrap">
+                                            {days.map((day, idx) => {
+                                                if (day === null) return <View key={`e${idx}`} style={{width:'14.28%',height:40}} />;
+                                                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                                const dateObj = new Date(dateStr + 'T00:00:00');
+                                                const isPast = dateObj < today;
+                                                const isSelected = dateStr === selectedDate;
+                                                const isToday = dateStr === today.toISOString().split('T')[0];
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={day}
+                                                        disabled={isPast}
+                                                        onPress={() => { setSelectedDate(dateStr); setShowCalendar(false); }}
+                                                        style={{width:'14.28%',height:40,alignItems:'center',justifyContent:'center'}}
+                                                    >
+                                                        <View className={`h-8 w-8 rounded-full items-center justify-center ${isSelected ? 'bg-emerald-600' : isToday ? 'border border-emerald-500' : ''}`}>
+                                                            <Text className={`text-sm font-semibold ${isPast ? 'text-appText/20' : isSelected ? 'text-white' : 'text-appText'}`}>{day}</Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    </>
+                                );
+                            })()}
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                </Modal>
+
                 {/* Danh sách sân con & Lịch (Time Slots) */}
                 <View className="mt-4 px-4 gap-3">
-                    {subCourts.map((sub, idx) => (
-                        <View key={sub._id || idx} className="rounded-xl border border-appText/10 bg-appSurface p-3 flex-row items-center shadow-sm shadow-black/5">
-                            <Text className="w-14 text-sm font-bold text-appText">{sub.name}</Text>
-                            
-                            {/* Fake time slots matching the design */}
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-                                {/* Slot 1 */}
-                                <TouchableOpacity className="items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 min-w-[64px]">
-                                    <Text className="text-xs font-bold text-white">14:00</Text>
-                                    <Text className="text-[9px] text-emerald-100">Available</Text>
-                                </TouchableOpacity>
-                                {/* Slot 2 */}
-                                <TouchableOpacity className="items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 min-w-[64px]">
-                                    <Text className="text-xs font-bold text-white">15:00</Text>
-                                    <Text className="text-[9px] text-emerald-100">Available</Text>
-                                </TouchableOpacity>
-                                {/* Slot 3 */}
-                                <TouchableOpacity className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${idx % 2 !== 0 ? 'bg-red-600' : 'bg-emerald-600'}`}>
-                                    <Text className="text-xs font-bold text-white">16:00</Text>
-                                    <Text className={`text-[9px] ${idx % 2 !== 0 ? 'text-red-100' : 'text-emerald-100'}`}>{idx % 2 !== 0 ? 'Booked' : 'Available'}</Text>
-                                </TouchableOpacity>
-                                {/* Slot 4 */}
-                                <TouchableOpacity className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${idx > 0 ? 'bg-slate-400 dark:bg-slate-600' : 'bg-emerald-600'}`}>
-                                    <Text className={`text-xs font-bold ${idx > 0 ? 'text-slate-100' : 'text-white'}`}>17:00</Text>
-                                    <Text className={`text-[9px] ${idx > 0 ? 'text-slate-200' : 'text-emerald-100'}`}>{idx > 0 ? 'Locked' : 'Available'}</Text>
-                                </TouchableOpacity>
-                                {/* Slot 5 */}
-                                <TouchableOpacity className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${idx > 0 ? 'bg-slate-400 dark:bg-slate-600' : 'bg-emerald-600'}`}>
-                                    <Text className={`text-xs font-bold ${idx > 0 ? 'text-slate-100' : 'text-white'}`}>18:00</Text>
-                                    <Text className={`text-[9px] ${idx > 0 ? 'text-slate-200' : 'text-emerald-100'}`}>{idx > 0 ? 'Locked' : 'Available'}</Text>
-                                </TouchableOpacity>
-                            </ScrollView>
-                        </View>
-                    ))}
+                    {isFetchingSlots ? (
+                        <ActivityIndicator size="small" color="#059669" />
+                    ) : (
+                        subCourts.map((sub, idx) => {
+                            const slots = getSlotsForSubCourt(sub._id);
+
+                            return (
+                                <View key={sub._id || idx} className="rounded-xl border border-appText/10 bg-appSurface p-3 flex-row items-center shadow-sm shadow-black/5">
+                                    <Text className="w-14 text-sm font-bold text-appText">{sub.name}</Text>
+                                    
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+                                        {slots.length === 0 ? (
+                                            <Text className="text-xs text-appText/50 italic">Không có lịch</Text>
+                                        ) : (
+                                            slots.map((slot, sIdx) => {
+                                                const isAvailable = slot.status === "available";
+                                                const isLocked = slot.status === "locked";
+                                                const isBooked = slot.status === "booked";
+                                                const isSelected = selectedSubCourt === sub._id && selectedSlotIndices.includes(sIdx);
+                                                
+                                                let bgColor = "bg-red-100 dark:bg-red-900/30";
+                                                let textColor = "text-red-500 dark:text-red-400";
+                                                let subTextColor = "text-red-400 dark:text-red-500";
+                                                let label = "Đã đặt";
+                                                
+                                                if (isLocked) {
+                                                    bgColor = "bg-amber-100 dark:bg-amber-900/30";
+                                                    textColor = "text-amber-600 dark:text-amber-400";
+                                                    subTextColor = "text-amber-500 dark:text-amber-500";
+                                                    label = "Đang giữ";
+                                                } else if (isAvailable) {
+                                                    bgColor = isSelected ? "bg-emerald-700" : "bg-emerald-100 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800";
+                                                    textColor = isSelected ? "text-white" : "text-emerald-700 dark:text-emerald-400";
+                                                    subTextColor = isSelected ? "text-emerald-100" : "text-emerald-600/70 dark:text-emerald-500/70";
+                                                    label = "Trống";
+                                                }
+
+                                                return (
+                                                    <TouchableOpacity 
+                                                        key={sIdx}
+                                                        onPress={() => handleSlotClick(sub._id, sIdx, slot)}
+                                                        activeOpacity={isAvailable ? 0.7 : 1}
+                                                        className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${bgColor}`}
+                                                    >
+                                                        <Text className={`text-xs font-bold ${textColor}`}>{slot.start}</Text>
+                                                        <Text className={`text-[9px] ${subTextColor}`}>{label}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })
+                                        )}
+                                    </ScrollView>
+                                </View>
+                            );
+                        })
+                    )}
                 </View>
             </ScrollView>
 
@@ -304,17 +544,23 @@ export default function CourtDetailScreen() {
             <View className="absolute bottom-0 left-0 right-0 border-t border-appText/10 bg-appSurface px-5 py-4 flex-row items-center justify-between shadow-lg shadow-black/20" style={{ paddingBottom: 24 }}>
                 <View>
                     <Text className="text-xs font-medium text-appText/60">
-                        Giờ hoạt động: <Text className="font-bold text-appText">{court.open_time || "06:00"} - {court.close_time || "22:00"}</Text>
+                        {selectedSlotIndices.length > 0 ? `${selectedSlotIndices.length} slot đã chọn` : `Giờ hoạt động: ${court.open_time || "06:00"} - ${court.close_time || "22:00"}`}
                     </Text>
                     <Text className="mt-1 text-xs font-medium text-appText/60">
-                        Giá: <Text className="text-sm font-bold text-emerald-600">{formatPrice(minPrice)}/h</Text>
+                        Giá: <Text className="text-sm font-bold text-emerald-600">
+                            {selectedSlotIndices.length > 0 
+                                ? formatPrice((subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length)
+                                : formatPrice(minPrice) + "/h"}
+                        </Text>
                     </Text>
                 </View>
                 <TouchableOpacity 
-                    onPress={() => navigation.navigate("Thanh toán", { courtId: court.id || court._id })}
-                    className="rounded-xl bg-emerald-600 px-8 py-3.5 shadow-md shadow-emerald-900/20"
+                    onPress={handleBookNow}
+                    className={`rounded-xl px-8 py-3.5 shadow-md flex-row items-center gap-2 ${selectedSlotIndices.length > 0 && !isLocking ? 'bg-emerald-600 shadow-emerald-900/20' : 'bg-appText/20'}`}
+                    disabled={selectedSlotIndices.length === 0 || isLocking}
                 >
-                    <Text className="text-sm font-bold text-white text-center">Đặt sân ngay</Text>
+                    {isLocking ? <ActivityIndicator size="small" color="white" /> : null}
+                    <Text className="text-sm font-bold text-white text-center">{isLocking ? "Đang giữ chỗ..." : "Đặt sân ngay"}</Text>
                 </TouchableOpacity>
             </View>
         </View>

@@ -226,12 +226,6 @@ export default function HomeScreen() {
                             returnKeyType="search"
                         />
                     </View>
-                    <TouchableOpacity
-                        onPress={() => Alert.alert("Bộ lọc", "Tính năng lọc nâng cao đang phát triển.")}
-                        className="rounded-2xl bg-emerald-700 px-4 py-3"
-                    >
-                        <Text className="font-semibold text-white">Lọc</Text>
-                    </TouchableOpacity>
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-5" contentContainerClassName="gap-3 pr-4">
