@@ -4,10 +4,10 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { logout, fetchUserProfile } from "../../auth/authSlice";
+import { logout, fetchUserProfile } from "../../../store/slices/authSlice";
 import { removeItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
-import { fetchCourts } from "../venueSlice";
+import { fetchCourts } from "../../../store/slices/venueSlice";
 
 // Mapping icon cho các loại sân (key = tên tiếng Anh từ BE)
 const SPORT_ICONS = {
@@ -190,15 +190,16 @@ export default function HomeScreen() {
                             </TouchableOpacity>
                         )}
                         {isLoggedIn ? (
-                            <TouchableOpacity
-                                onPress={() => navigation.navigate("Hồ sơ")}
-                                className="h-9 w-9 overflow-hidden rounded-full border border-emerald-500"
-                            >
-                                <Image
-                                    source={{ uri: user?.avatarUrl || user?.avatar || user?.profilePicture || "https://i.pravatar.cc/150?img=11" }}
-                                    className="h-full w-full bg-slate-200"
-                                />
-                            </TouchableOpacity>
+                            <>
+                                <TouchableOpacity
+                                    onPress={() => navigation.navigate("Thông báo")}
+                                    className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10 relative"
+                                >
+                                    <Ionicons name="notifications-outline" size={18} color={iconColor} />
+                                    {/* Giả lập có thông báo */}
+                                    <View className="absolute top-1.5 right-2 h-2.5 w-2.5 rounded-full bg-red-500 border border-appSurface" />
+                                </TouchableOpacity>
+                            </>
                         ) : null}
                         <TouchableOpacity
                             onPress={toggleColorScheme}
@@ -214,12 +215,12 @@ export default function HomeScreen() {
                 </View>
 
                 <View className="mt-5 flex-row items-center gap-3">
-                    <View className="flex-1 flex-row items-center rounded-2xl border border-appText/10 bg-appSurface px-4 py-3">
-                        <Ionicons name="search-outline" size={20} color={isDark ? "#94A3B8" : "#64748B"} style={{ marginRight: 8 }} />
+                    <View className="flex-1 flex-row items-center rounded-full border border-appText/10 bg-appSurface px-4 py-1.5">
+                        <Ionicons name="search-outline" size={18} color={isDark ? "#94A3B8" : "#64748B"} style={{ marginRight: 8 }} />
                         <TextInput
                             placeholder="Tìm sân, môn thể thao..."
                             placeholderTextColor="#94A3B8"
-                            className="flex-1 text-base text-appText"
+                            className="flex-1 text-sm text-appText"
                             value={searchText}
                             onChangeText={setSearchText}
                             onSubmitEditing={handleSearch}

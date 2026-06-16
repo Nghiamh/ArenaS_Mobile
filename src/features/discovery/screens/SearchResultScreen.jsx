@@ -3,9 +3,9 @@ import { SafeAreaView, View, Text, ScrollView, TouchableOpacity, Image, Alert, A
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useDispatch, useSelector } from "react-redux";
-import { logout } from "../../auth/authSlice";
-import { fetchCourts } from "../venueSlice";
+import { useSelector, useDispatch } from "react-redux";
+import { logout } from "../../../store/slices/authSlice";
+import { fetchCourts } from "../../../store/slices/venueSlice";
 
 const filters = ["Tất cả", "Gần đây", "Giá tốt nhất", "Đánh giá cao"];
 
@@ -41,6 +41,9 @@ export default function SearchResultScreen() {
     const dispatch = useDispatch();
     const sportName = route.params?.sport || "";
     const query = route.params?.query || "";
+
+    const { token, isGuest, user } = useSelector((state) => state.auth);
+    const isLoggedIn = !!token && !isGuest;
 
     const { venues: courts, status, error } = useSelector((state) => state.venue);
     const isLoading = status === "loading";
@@ -93,12 +96,24 @@ export default function SearchResultScreen() {
                     </View>
 
                     <View className="flex-row items-center gap-2 z-10">
-                        <TouchableOpacity
-                            onPress={() => dispatch(logout())}
-                            className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
-                        >
-                            <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
-                        </TouchableOpacity>
+                        {!isLoggedIn && (
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate("Đăng nhập")}
+                                className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
+                            >
+                                <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
+                            </TouchableOpacity>
+                        )}
+                        {isLoggedIn ? (
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate("Thông báo")}
+                                className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10 relative"
+                            >
+                                <Ionicons name="notifications-outline" size={18} color={iconColor} />
+                                {/* Giả lập có thông báo */}
+                                <View className="absolute top-1.5 right-2 h-2.5 w-2.5 rounded-full bg-red-500 border border-appSurface" />
+                            </TouchableOpacity>
+                        ) : null}
                         <TouchableOpacity
                             onPress={toggleColorScheme}
                             className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
