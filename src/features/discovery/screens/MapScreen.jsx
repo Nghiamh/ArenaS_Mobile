@@ -16,7 +16,7 @@ export default function MapScreen() {
     const [isSearching, setIsSearching] = useState(false);
     
     // Nếu được điều hướng từ chi tiết sân, sẽ có latitude/longitude
-    const { latitude, longitude, venueName } = route.params || {};
+    const { latitude, longitude, venueName, mode, sport } = route.params || {};
 
     // Mặc định TPHCM nếu không có
     const lat = latitude || 10.762622;
@@ -66,8 +66,15 @@ export default function MapScreen() {
         return price.toLocaleString("vi-VN") + "đ/giờ";
     };
 
+    const displayVenues = sport 
+        ? venues.filter(v => {
+            const baseSport = sport.split('_')[0].toLowerCase();
+            return v.sports && v.sports.some(s => s.toLowerCase().includes(baseSport));
+        })
+        : venues;
+
     // Chuẩn bị JS để render marker & popup cho các sân
-    const markersJs = venues
+    const markersJs = displayVenues
         .filter(v => v.coordinates?.latitude && v.coordinates?.longitude)
         .map(v => {
             const popupHtml = `
@@ -81,7 +88,7 @@ export default function MapScreen() {
                         <div class="popup-price">${formatPrice(v.price_per_hour)}</div>
                         <div class="popup-rating">⭐ ${v.avg_rating || "0.0"}</div>
                     </div>
-                    <button class="btn-primary" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: 'VIEW_DETAIL', id: '${v.id || v._id}'}))">Xem chi tiết</button>
+                    <button class="btn-primary" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: '${mode === 'selectForMatchmaking' ? 'SELECT_COURT' : 'VIEW_DETAIL'}', id: '${v.id || v._id}', name: '${(v.name || "").replace(/'/g, "\\'")}'}))">${mode === 'selectForMatchmaking' ? 'Chọn sân này' : 'Xem chi tiết'}</button>
                     <button class="btn-outline" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: 'DIRECTIONS', lat: ${v.coordinates.latitude}, lng: ${v.coordinates.longitude}}))">Chỉ đường</button>
                 </div>
             `;
@@ -254,6 +261,8 @@ export default function MapScreen() {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === 'VIEW_DETAIL') {
                 navigation.navigate("Đặt lịch", { courtId: data.id });
+            } else if (data.type === 'SELECT_COURT') {
+                navigation.navigate("Ghép Kèo", { selectedCourtId: data.id, selectedCourtName: data.name });
             } else if (data.type === 'DIRECTIONS') {
                 const url = `https://www.google.com/maps/dir/?api=1&destination=${data.lat},${data.lng}`;
                 Linking.openURL(url);
@@ -379,7 +388,7 @@ export default function MapScreen() {
                     <View style={styles.searchHeader}>
                         <Text style={styles.searchTitle}>Tìm sân theo vị trí</Text>
                         <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{venues.length} sân</Text>
+                            <Text style={styles.badgeText}>{displayVenues.length} sân</Text>
                         </View>
                     </View>
                     
