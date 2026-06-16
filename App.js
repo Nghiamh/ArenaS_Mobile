@@ -1,7 +1,8 @@
 import "react-native-gesture-handler";
 import "./global.css";
 
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { useState } from "react";
+import { NavigationContainer, DefaultTheme, useNavigationContainerRef } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -10,11 +11,14 @@ import { useColorScheme } from "nativewind";
 
 import { store } from "./src/store";
 import AppNavigator from "./src/navigation/AppNavigator";
+import MatchmakingOverlay from "./src/components/MatchmakingOverlay";
 import { themeTokens } from "./src/constants/theme";
 
 export default function App() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
+    const navigationRef = useNavigationContainerRef();
+    const [currentRoute, setCurrentRoute] = useState("");
 
     const navigationTheme = {
         ...DefaultTheme,
@@ -33,9 +37,15 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <Provider store={store}>
-                    <NavigationContainer theme={navigationTheme}>
+                    <NavigationContainer 
+                        theme={navigationTheme}
+                        ref={navigationRef}
+                        onReady={() => setCurrentRoute(navigationRef.getCurrentRoute()?.name)}
+                        onStateChange={() => setCurrentRoute(navigationRef.getCurrentRoute()?.name)}
+                    >
                         <StatusBar style={isDark ? "light" : "dark"} />
                         <AppNavigator />
+                        <MatchmakingOverlay currentRoute={currentRoute} navigationRef={navigationRef} />
                     </NavigationContainer>
                 </Provider>
             </SafeAreaProvider>

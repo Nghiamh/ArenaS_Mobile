@@ -10,6 +10,9 @@ import EditProfileScreen from "../features/discovery/screens/EditProfileScreen";
 import WalletScreen from "../features/discovery/screens/WalletScreen";
 import PaymentScreen from "../features/booking/screens/PaymentScreen";
 import MapScreen from "../features/discovery/screens/MapScreen";
+import MatchmakingScreen from "../features/discovery/screens/MatchmakingScreen";
+import NotificationScreen from "../features/discovery/screens/NotificationScreen";
+import UserSkillScreen from "../features/discovery/screens/UserSkillScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -38,6 +41,8 @@ export default function MainTab() {
                         iconName = focused ? "search" : "search-outline";
                     } else if (route.name === "Bản đồ") {
                         iconName = focused ? "map" : "map-outline";
+                    } else if (route.name === "Ghép Kèo") {
+                        iconName = focused ? "people" : "people-outline";
                     } else if (route.name === "Hồ sơ") {
                         iconName = focused ? "person" : "person-outline";
                     }
@@ -49,6 +54,7 @@ export default function MainTab() {
             <Tab.Screen name="Trang chủ" component={HomeScreen} options={{ tabBarLabel: "Trang chủ" }} />
             <Tab.Screen name="Tìm Sân" component={SearchResultScreen} options={{ tabBarLabel: "Tìm Sân" }} />
             <Tab.Screen name="Bản đồ" component={MapScreen} options={{ tabBarLabel: "Bản đồ" }} />
+            <Tab.Screen name="Ghép Kèo" component={MatchmakingScreen} options={{ tabBarLabel: "Ghép Kèo" }} />
             <Tab.Screen name="Hồ sơ" component={ProfileScreen} options={{ tabBarLabel: "Hồ sơ" }} />
             
             {/* Hidden Screens */}
@@ -84,6 +90,23 @@ export default function MainTab() {
                     tabBarItemStyle: { display: 'none' } 
                 }} 
             />
+            <Tab.Screen 
+                name="Thông báo" 
+                component={NotificationScreen} 
+                options={{ 
+                    tabBarButton: () => null, 
+                    tabBarItemStyle: { display: 'none' } 
+                }} 
+            />
+            <Tab.Screen 
+                name="Kỹ năng" 
+                component={UserSkillScreen} 
+                options={{ 
+                    tabBarButton: () => null, 
+                    tabBarItemStyle: { display: 'none' } 
+                }} 
+            />
+
         </Tab.Navigator>
     );
 }
