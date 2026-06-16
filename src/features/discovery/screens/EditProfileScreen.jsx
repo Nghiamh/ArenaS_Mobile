@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { updateUserProfile } from "../../auth/authSlice";
+import { updateUserProfile } from "../../../store/slices/authSlice";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function EditProfileScreen() {
@@ -33,6 +33,8 @@ export default function EditProfileScreen() {
             setDateOfBirth(user.dateOfBirth ? user.dateOfBirth.substring(0, 10) : "");
         }
     }, [user]);
+
+
 
     const handleSave = async () => {
         if (!name.trim()) {

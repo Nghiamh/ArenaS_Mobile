@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { setCredentials, setGuestMode } from "../features/auth/authSlice";
+import { setCredentials, setGuestMode } from "../store/slices/authSlice";
 import { getItem } from "../utils/storage";
 import Loading from "../components/Loading";
 import { STORAGE_KEYS } from "../constants/config";

@@ -4,10 +4,11 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { logout, fetchUserProfile } from "../../auth/authSlice";
+import { logout, fetchUserProfile } from "../../../store/slices/authSlice";
 import { removeItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
 import bookingApi from "../../../api/bookingApi";
+import matchmakingApi from "../../../api/matchmakingApi";
 import React from "react";
 
 export default function ProfileScreen() {
@@ -23,6 +24,15 @@ export default function ProfileScreen() {
     const [isLoadingBookings, setIsLoadingBookings] = useState(false);
     const [bookingFilter, setBookingFilter] = useState("all");
     const [selectedBooking, setSelectedBooking] = useState(null);
+
+    // Feedback State
+    const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+    const [feedbackBooking, setFeedbackBooking] = useState(null);
+    const [punctual, setPunctual] = useState(true);
+    const [attitude, setAttitude] = useState('friendly'); // 'friendly', 'neutral', 'bad'
+    const [skillAsDescribed, setSkillAsDescribed] = useState(true);
+    const [playAgain, setPlayAgain] = useState(true);
+    const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
     // Fetch user profile when entering the screen
     useFocusEffect(
@@ -109,6 +119,36 @@ export default function ProfileScreen() {
         ]);
     };
 
+    const handleSubmitFeedback = async () => {
+        try {
+            setIsSubmittingFeedback(true);
+            const data = {
+                punctual,
+                attitude,
+                skill_as_described: skillAsDescribed,
+                play_again: playAgain
+            };
+            const matchId = feedbackBooking.match_id || feedbackBooking._id || feedbackBooking.id;
+            await matchmakingApi.submitFeedback(matchId, data);
+            
+            Alert.alert("🎉 Chúc mừng!", "Bạn nhận được 10 XP & 5 Điểm tích lũy.");
+            setFeedbackModalVisible(false);
+            
+            // Cập nhật lại danh sách booking để ẩn nút đánh giá (giả lập)
+            setBookings(bookings.map(b => 
+                (b._id === feedbackBooking._id || b.id === feedbackBooking.id) 
+                ? { ...b, is_feedback_submitted: true } : b
+            ));
+            
+            // Fetch lại profile để cập nhật điểm mới
+            dispatch(fetchUserProfile());
+        } catch (error) {
+            Alert.alert("Lỗi", "Không thể gửi đánh giá: " + (error.response?.data?.message || error.message));
+        } finally {
+            setIsSubmittingFeedback(false);
+        }
+    };
+
     const handleLogout = async () => {
         Alert.alert(
             "Đăng xuất",
@@ -189,6 +229,10 @@ export default function ProfileScreen() {
                         <>
                             <Text className="text-xl font-bold text-appText">{userName}</Text>
                             <Text className="text-sm text-appText/60">{userEmail}</Text>
+                            <View className="flex-row items-center mt-1">
+                                <Text className="text-xs font-bold text-emerald-600">Uy tín: {user.reliability_score ?? 100}/100 </Text>
+                                <Ionicons name="star" size={12} color="#F59E0B" />
+                            </View>
                         </>
                     )}
                 </View>
@@ -223,15 +267,19 @@ export default function ProfileScreen() {
             )}
 
             {/* Stats Card */}
-            <View className="mt-6 flex-row rounded-2xl bg-appSurface p-4 border border-appText/10 shadow-sm shadow-black/5">
+            <View className="mt-6 flex-row rounded-2xl bg-appSurface py-4 border border-appText/10 shadow-sm shadow-black/5">
                 <View className="flex-1 items-center border-r border-appText/10">
-                    <Text className="text-xs font-medium text-appText/60">ĐIỂM TÍCH LŨY</Text>
-                    <Text className="mt-1 text-lg font-bold text-emerald-600">{user.points ?? 0} pts</Text>
+                    <Text className="text-[10px] font-medium text-appText/60 uppercase">Điểm tích lũy</Text>
+                    <Text className="mt-1 text-base font-bold text-emerald-600">{user.points ?? 0} pts</Text>
                 </View>
-                <View className="flex-1 items-center">
-                    <Text className="text-xs font-medium text-appText/60">ĐÃ ĐẶT SÂN</Text>
-                    <Text className="mt-1 text-lg font-bold text-appText">{bookings.length} buổi</Text>
+                <View className="flex-1 items-center border-r border-appText/10">
+                    <Text className="text-[10px] font-medium text-appText/60 uppercase">Đã đặt sân</Text>
+                    <Text className="mt-1 text-base font-bold text-appText">{bookings.length} buổi</Text>
                 </View>
+                <TouchableOpacity onPress={() => navigation.navigate("Kỹ năng")} className="flex-1 items-center justify-center">
+                    <Text className="text-[10px] font-medium text-appText/60 uppercase">Kỹ năng</Text>
+                    <Text className="mt-1 text-sm font-bold text-emerald-600">Xem ›</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Bookings Section */}
@@ -388,21 +436,111 @@ export default function ProfileScreen() {
                                             setSelectedBooking(null);
                                             handleCancelBooking(bookingToCancel);
                                         }}
-                                        className="w-full rounded-xl bg-red-100 dark:bg-red-900/30 py-3.5 border border-red-200 dark:border-red-800"
+                                        className="w-full rounded-xl bg-red-100 dark:bg-red-900/30 py-3.5 border border-red-200 dark:border-red-800 mb-3"
                                     >
                                         <Text className="text-sm font-bold text-center text-red-600 dark:text-red-400">Hủy đặt sân</Text>
                                     </TouchableOpacity>
-                                ) : (
+                                ) : b.displayStatus === "completed" && !b.is_feedback_submitted ? (
                                     <TouchableOpacity 
-                                        onPress={() => setSelectedBooking(null)}
-                                        className="w-full rounded-xl bg-emerald-600 py-3.5 shadow-md shadow-emerald-900/20"
+                                        onPress={() => {
+                                            setFeedbackBooking(b);
+                                            setSelectedBooking(null);
+                                            setFeedbackModalVisible(true);
+                                        }}
+                                        className="w-full rounded-xl bg-amber-500 py-3.5 shadow-md shadow-amber-900/20 mb-3"
                                     >
-                                        <Text className="text-sm font-bold text-center text-white">Đóng</Text>
+                                        <Text className="text-sm font-bold text-center text-white">⭐ Đánh giá & Nhận XP</Text>
                                     </TouchableOpacity>
-                                )}
+                                ) : null}
+
+                                <TouchableOpacity 
+                                    onPress={() => setSelectedBooking(null)}
+                                    className="w-full rounded-xl bg-emerald-600 py-3.5 shadow-md shadow-emerald-900/20"
+                                >
+                                    <Text className="text-sm font-bold text-center text-white">Đóng</Text>
+                                </TouchableOpacity>
                             </>
                         );
                     })()}
+                </View>
+            </View>
+        </Modal>
+
+        {/* Feedback Modal */}
+        <Modal visible={feedbackModalVisible} transparent animationType="fade" onRequestClose={() => setFeedbackModalVisible(false)}>
+            <View className="flex-1 justify-center bg-black/60 px-5">
+                <View className="bg-white dark:bg-appBg rounded-3xl p-6 shadow-xl">
+                    <Text className="text-xl font-bold text-appText text-center mb-1">Đánh giá trận đấu</Text>
+                    <Text className="text-sm text-appText/60 text-center mb-6">Đánh giá trung thực giúp xây dựng cộng đồng văn minh.</Text>
+                    
+                    <View className="gap-5">
+                        <View>
+                            <Text className="text-base font-bold text-appText mb-3">1. Đối thủ đến đúng giờ không?</Text>
+                            <View className="flex-row gap-3">
+                                <TouchableOpacity onPress={() => setPunctual(true)} className={`flex-1 py-3 rounded-xl border ${punctual ? 'bg-emerald-50 border-emerald-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center font-bold ${punctual ? 'text-emerald-700' : 'text-appText'}`}>Có</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setPunctual(false)} className={`flex-1 py-3 rounded-xl border ${!punctual ? 'bg-red-50 border-red-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center font-bold ${!punctual ? 'text-red-600' : 'text-appText'}`}>Không</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View>
+                            <Text className="text-base font-bold text-appText mb-3">2. Thái độ chơi?</Text>
+                            <View className="flex-row gap-2">
+                                <TouchableOpacity onPress={() => setAttitude('friendly')} className={`flex-1 py-3 rounded-xl border ${attitude === 'friendly' ? 'bg-emerald-50 border-emerald-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center text-xs font-bold ${attitude === 'friendly' ? 'text-emerald-700' : 'text-appText'}`}>Vui vẻ</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setAttitude('neutral')} className={`flex-1 py-3 rounded-xl border ${attitude === 'neutral' ? 'bg-amber-50 border-amber-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center text-xs font-bold ${attitude === 'neutral' ? 'text-amber-700' : 'text-appText'}`}>Bình thường</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setAttitude('bad')} className={`flex-1 py-3 rounded-xl border ${attitude === 'bad' ? 'bg-red-50 border-red-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center text-xs font-bold ${attitude === 'bad' ? 'text-red-600' : 'text-appText'}`}>Tệ</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View>
+                            <Text className="text-base font-bold text-appText mb-3">3. Trình độ như App ghi không?</Text>
+                            <View className="flex-row gap-3">
+                                <TouchableOpacity onPress={() => setSkillAsDescribed(true)} className={`flex-1 py-3 rounded-xl border ${skillAsDescribed ? 'bg-emerald-50 border-emerald-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center font-bold ${skillAsDescribed ? 'text-emerald-700' : 'text-appText'}`}>Đúng</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setSkillAsDescribed(false)} className={`flex-1 py-3 rounded-xl border ${!skillAsDescribed ? 'bg-red-50 border-red-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center font-bold ${!skillAsDescribed ? 'text-red-600' : 'text-appText'}`}>Sai lệch</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View>
+                            <Text className="text-base font-bold text-appText mb-3">4. Có muốn chơi lại không?</Text>
+                            <View className="flex-row gap-3">
+                                <TouchableOpacity onPress={() => setPlayAgain(true)} className={`flex-1 py-3 rounded-xl border ${playAgain ? 'bg-emerald-50 border-emerald-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center font-bold ${playAgain ? 'text-emerald-700' : 'text-appText'}`}>Có</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setPlayAgain(false)} className={`flex-1 py-3 rounded-xl border ${!playAgain ? 'bg-red-50 border-red-500' : 'bg-appSurface border-appText/10'}`}>
+                                    <Text className={`text-center font-bold ${!playAgain ? 'text-red-600' : 'text-appText'}`}>Không</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View className="flex-row gap-3 mt-8">
+                        <TouchableOpacity 
+                            onPress={() => setFeedbackModalVisible(false)}
+                            className="flex-1 py-3.5 rounded-xl border border-appText/20"
+                        >
+                            <Text className="text-center font-bold text-appText/70">Bỏ qua</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            onPress={handleSubmitFeedback}
+                            disabled={isSubmittingFeedback}
+                            className="flex-1 py-3.5 rounded-xl bg-amber-500 shadow-md shadow-amber-900/20"
+                        >
+                            {isSubmittingFeedback ? <ActivityIndicator color="#fff" /> : <Text className="text-center font-bold text-white">Gửi & Nhận XP</Text>}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         </Modal>

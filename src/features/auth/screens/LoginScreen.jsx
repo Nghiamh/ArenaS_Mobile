@@ -15,7 +15,7 @@ import { useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
-import { setGuestMode, setCredentials } from "../authSlice";
+import { setGuestMode, setCredentials } from "../../../store/slices/authSlice";
 import { setItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
 import authApi from "../../../api/authApi";

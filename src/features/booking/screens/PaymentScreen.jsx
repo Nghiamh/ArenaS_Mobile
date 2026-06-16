@@ -7,7 +7,7 @@ import { useSelector, useDispatch } from "react-redux";
 import bookingApi from "../../../api/bookingApi";
 import walletApi from "../../../api/walletApi";
 import voucherApi from "../../../api/voucherApi";
-import { resetBooking } from "../bookingSlice";
+import { resetBooking } from "../../../store/slices/bookingSlice";
 
 export default function PaymentScreen() {
     const { colorScheme } = useColorScheme();

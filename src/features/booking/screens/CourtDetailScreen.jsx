@@ -4,8 +4,8 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchCourtById } from "../../discovery/venueSlice";
-import { setCheckoutDraft } from "../bookingSlice";
+import { fetchCourtById } from "../../../store/slices/venueSlice";
+import { setCheckoutDraft } from "../../../store/slices/bookingSlice";
 import bookingApi from "../../../api/bookingApi";
 
 const { width } = Dimensions.get("window");
