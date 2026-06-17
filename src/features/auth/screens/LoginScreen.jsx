@@ -74,7 +74,7 @@ export default function LoginScreen() {
 
     // ── Google Auth (core expo-auth-session) ─────────────
     const redirectUri = makeRedirectUri();
-
+    console.log("=== REDIRECT URI ===", redirectUri);
     const [googleRequest, googleResponse, promptGoogleAsync] = useAuthRequest(
         {
             clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
