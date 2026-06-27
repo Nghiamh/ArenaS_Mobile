@@ -29,9 +29,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
     ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
   }
 }
-expoAutolinking.useExpoModules([
-  ignoredPackages: ['react-native-worklets']
-])
+expoAutolinking.useExpoModules()
 
 
 rootProject.name = 'ArenaS'
