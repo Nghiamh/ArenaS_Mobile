@@ -19,7 +19,12 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.anonymous.arenas"
+      "package": "com.arenas.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/Img/logo.JPG.jpg",
+        "backgroundColor": "#007F3F"
+      }
     },
     "web": {
       "bundler": "metro"

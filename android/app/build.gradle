@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.arenas'
+    namespace 'com.arenas.mobile'
     defaultConfig {
-        applicationId 'com.anonymous.arenas'
+        applicationId 'com.arenas.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
