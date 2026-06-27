@@ -1,3 +1,4 @@
+import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -13,10 +14,12 @@ import MapScreen from "../features/discovery/screens/MapScreen";
 import MatchmakingScreen from "../features/discovery/screens/MatchmakingScreen";
 import NotificationScreen from "../features/discovery/screens/NotificationScreen";
 import UserSkillScreen from "../features/discovery/screens/UserSkillScreen";
+import ChatScreen from "../features/discovery/screens/ChatScreen";
 
 const Tab = createBottomTabNavigator();
 
 export default function MainTab() {
+
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
 
@@ -101,6 +104,14 @@ export default function MainTab() {
             <Tab.Screen 
                 name="Kỹ năng" 
                 component={UserSkillScreen} 
+                options={{ 
+                    tabBarButton: () => null, 
+                    tabBarItemStyle: { display: 'none' } 
+                }} 
+            />
+            <Tab.Screen 
+                name="Chat" 
+                component={ChatScreen} 
                 options={{ 
                     tabBarButton: () => null, 
                     tabBarItemStyle: { display: 'none' } 

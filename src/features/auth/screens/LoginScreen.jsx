@@ -73,15 +73,18 @@ export default function LoginScreen() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
     // ── Google Auth (core expo-auth-session) ─────────────
-    const redirectUri = makeRedirectUri();
-    console.log("=== REDIRECT URI ===", redirectUri);
-    const [googleRequest, googleResponse, promptGoogleAsync] = useAuthRequest(
-        {
+    const authConfig = React.useMemo(() => {
+        const uri = makeRedirectUri();
+        return {
             clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-            redirectUri,
+            redirectUri: uri,
             scopes: ["openid", "profile", "email"],
             responseType: ResponseType.Code,
-        },
+        };
+    }, []);
+
+    const [googleRequest, googleResponse, promptGoogleAsync] = useAuthRequest(
+        authConfig,
         googleDiscovery
     );
 
@@ -99,7 +102,7 @@ export default function LoginScreen() {
                 {
                     clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
                     code,
-                    redirectUri,
+                    redirectUri: authConfig.redirectUri,
                     extraParams: {
                         code_verifier: googleRequest?.codeVerifier || "",
                     },

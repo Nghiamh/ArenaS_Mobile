@@ -6,6 +6,7 @@ import { useSelector, useDispatch } from "react-redux";
 import matchmakingApi from "../../../api/matchmakingApi";
 import { setStatus, setMatchData } from "../../../store/slices/matchmakingSlice";
 import MiniMap from "../../../components/MiniMap";
+import ReportModal from "./ReportModal";
 
 export default function MatchmakingScreen() {
     const navigation = useNavigation();
@@ -17,6 +18,7 @@ export default function MatchmakingScreen() {
     const [selectedSport, setSelectedSport] = useState("football");
     const [selectedCourt, setSelectedCourt] = useState(null);
     const [elapsedTime, setElapsedTime] = useState(0);
+    const [showReportModal, setShowReportModal] = useState(false);
 
     useEffect(() => {
         if (route.params?.selectedCourtId) {
@@ -294,13 +296,26 @@ export default function MatchmakingScreen() {
                 {/* Actions */}
                 {isConfirmed ? (
                     <View className="w-full mt-auto">
-                        <TouchableOpacity className="w-full py-4 rounded-xl bg-blue-500 items-center justify-center flex-row gap-2 mb-4 shadow-md shadow-blue-500/30">
+                        <TouchableOpacity 
+                            onPress={() => {
+                                const currentUserId = String(user?._id || user?.id);
+                                const opp = matchData?.participants?.find(p => String(p?._id || p?.id) !== currentUserId) || {};
+                                navigation.navigate('Chat', { 
+                                    matchId: matchData?._id || matchData?.id,
+                                    opponentName: opp.name || opp.userName || 'Đối thủ',
+                                });
+                            }}
+                            className="w-full py-4 rounded-xl bg-blue-500 items-center justify-center flex-row gap-2 mb-4 shadow-md shadow-blue-500/30"
+                        >
                             <Ionicons name="chatbubble-ellipses-outline" size={20} color="white" />
                             <Text className="text-white font-bold text-lg">Vào Chat</Text>
                         </TouchableOpacity>
                         
                         <View className="flex-row gap-4 w-full">
-                            <TouchableOpacity className="flex-1 py-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 items-center justify-center flex-row gap-2">
+                            <TouchableOpacity 
+                                onPress={() => setShowReportModal(true)}
+                                className="flex-1 py-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 items-center justify-center flex-row gap-2"
+                            >
                                 <Ionicons name="warning" size={16} color="#d97706" />
                                 <Text className="text-yellow-700 dark:text-yellow-500 font-bold">Tố cáo</Text>
                             </TouchableOpacity>
@@ -389,6 +404,17 @@ export default function MatchmakingScreen() {
                     </TouchableOpacity>
                 </View>
             )}
+            {/* Report Modal */}
+            <ReportModal
+                visible={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                matchId={matchData?._id || matchData?.id}
+                opponentName={
+                    matchData?.participants?.find(
+                        (p) => String(p?._id || p?.id) !== String(user?._id || user?.id)
+                    )?.name || "Đối thủ"
+                }
+            />
         </ScrollView>
     );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Dimensions, ActivityIndicator, Modal, FlatList } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Dimensions, ActivityIndicator, Modal, FlatList, TextInput } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchCourtById } from "../../../store/slices/venueSlice";
 import { setCheckoutDraft } from "../../../store/slices/bookingSlice";
 import bookingApi from "../../../api/bookingApi";
+import { reviewApi } from "../../../api/reviewApi";
 
 const { width } = Dimensions.get("window");
 
@@ -82,8 +83,75 @@ export default function CourtDetailScreen() {
     const [selectedSlotIndices, setSelectedSlotIndices] = useState([]);
 
     const courtId = route.params?.courtId;
+    const matchId = route.params?.matchId || null;
     const { selectedVenue: court, status, error } = useSelector((state) => state.venue);
     const isLoading = status === "loading";
+    const { user } = useSelector(state => state.auth);
+
+    // Review states
+    const [reviews, setReviews] = useState([]);
+    const [myReview, setMyReview] = useState(null);
+    const [canReview, setCanReview] = useState(false);
+    const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+    const [showReviewModal, setShowReviewModal] = useState(false);
+    const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
+    const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+    // Fetch reviews
+    useEffect(() => {
+        if (!courtId) return;
+        const fetchReviews = async () => {
+            try {
+                setIsLoadingReviews(true);
+                const [reviewsRes, canReviewRes, myReviewRes] = await Promise.all([
+                    reviewApi.getCourtReviews(courtId).catch(() => ({ data: { reviews: [] } })),
+                    user ? reviewApi.checkCanReview(courtId).catch(() => ({ data: { canReview: false } })) : Promise.resolve({ data: { canReview: false } }),
+                    user ? reviewApi.getMyReview(courtId).catch(() => ({ data: { review: null } })) : Promise.resolve({ data: { review: null } }),
+                ]);
+                setReviews(reviewsRes.data?.reviews || []);
+                setCanReview(canReviewRes.data?.canReview || false);
+                if (myReviewRes.data?.review) {
+                    setMyReview(myReviewRes.data.review);
+                    setReviewForm({ rating: myReviewRes.data.review.rating, comment: myReviewRes.data.review.comment || "" });
+                }
+            } catch (err) {
+                console.log("Error fetching reviews", err);
+            } finally {
+                setIsLoadingReviews(false);
+            }
+        };
+        fetchReviews();
+    }, [courtId, user]);
+
+    // Handle submit review
+    const handleSubmitReview = async () => {
+        if (reviewForm.rating < 1 || reviewForm.rating > 5) {
+            return Alert.alert("Lỗi", "Vui lòng chọn số sao từ 1 đến 5");
+        }
+        try {
+            setIsSubmittingReview(true);
+            if (myReview) {
+                // Update
+                const res = await reviewApi.updateReview(myReview._id, reviewForm);
+                setMyReview(res.data.review);
+                Alert.alert("Thành công", "Đã cập nhật đánh giá!");
+            } else {
+                // Create
+                const res = await reviewApi.createReview({ court_id: courtId, ...reviewForm });
+                setMyReview(res.data.review);
+                setCanReview(false); // only 1 review allowed
+                Alert.alert("Thành công", "Cảm ơn bạn đã đánh giá sân!");
+            }
+            // Refresh list
+            const reviewsRes = await reviewApi.getCourtReviews(courtId);
+            setReviews(reviewsRes.data?.reviews || []);
+            setShowReviewModal(false);
+        } catch (err) {
+            Alert.alert("Lỗi", err.response?.data?.error || "Có lỗi xảy ra khi gửi đánh giá");
+        } finally {
+            setIsSubmittingReview(false);
+        }
+    };
 
     // Helper: Tạo slots client-side dựa trên giờ mở/đóng cửa (giống BE)
     const generateClientSlots = (openTime = "06:00", closeTime = "22:00") => {
@@ -203,7 +271,8 @@ export default function CourtDetailScreen() {
             date: selectedDate,
             startTime,
             endTime,
-            totalPrice: price
+            totalPrice: price,
+            matchId: matchId || undefined,
         }));
 
         navigation.navigate("Thanh toán");
@@ -333,7 +402,16 @@ export default function CourtDetailScreen() {
                     <View className="flex-row items-start justify-between">
                         <View className="flex-1 mr-4">
                             <Text className="text-xl font-bold text-appText">{court.name}</Text>
-                            <View className="mt-2 flex-row items-start gap-1">
+                            {court.avg_rating > 0 && (
+                                <View className="mt-1 flex-row items-center gap-1">
+                                    <Ionicons name="star" size={14} color="#F59E0B" />
+                                    <Text className="text-sm font-bold text-appText">{court.avg_rating}</Text>
+                                    <Text className="text-xs text-appText/50">
+                                        ({reviews.length > 0 ? `${reviews.length} đánh giá` : 'Chưa có đánh giá'})
+                                    </Text>
+                                </View>
+                            )}
+                            <View className="mt-1.5 flex-row items-start gap-1">
                                 <Ionicons name="location-outline" size={16} color={isDark ? "#9CA3AF" : "#6B7280"} />
                                 <Text className="flex-1 text-xs text-appText/70 leading-tight">
                                     {court.location || court.address || "Chưa cập nhật địa chỉ"}
@@ -538,30 +616,142 @@ export default function CourtDetailScreen() {
                         })
                     )}
                 </View>
+
+                {/* Reviews Section */}
+                <View className="mt-8 px-4 pb-8">
+                    <View className="flex-row items-center justify-between mb-4">
+                        <Text className="text-lg font-bold text-appText">Đánh giá sân ({reviews.length})</Text>
+                        {(canReview || myReview) && (
+                            <TouchableOpacity onPress={() => setShowReviewModal(true)} className="flex-row items-center gap-1 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                                <Ionicons name="pencil" size={14} color="#059669" />
+                                <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                                    {myReview ? "Sửa đánh giá" : "Viết đánh giá"}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {isLoadingReviews ? (
+                        <ActivityIndicator size="small" color="#059669" className="py-4" />
+                    ) : reviews.length === 0 ? (
+                        <View className="bg-appSurface border border-appText/5 rounded-2xl p-6 items-center shadow-sm shadow-black/5">
+                            <Ionicons name="chatbubbles-outline" size={40} color={isDark ? "#475569" : "#94A3B8"} />
+                            <Text className="mt-3 text-sm text-appText/50 text-center">Chưa có đánh giá nào. {canReview && 'Hãy là người đầu tiên đánh giá sân này!'}</Text>
+                        </View>
+                    ) : (
+                        <View className="gap-4">
+                            {reviews.map((r, i) => (
+                                <View key={r._id || i} className="bg-appSurface border border-appText/5 rounded-2xl p-4 shadow-sm shadow-black/5">
+                                    <View className="flex-row items-center justify-between mb-2">
+                                        <View className="flex-row items-center gap-2">
+                                            <View className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 items-center justify-center">
+                                                {r.user_id?.avatar ? (
+                                                    <Image source={{ uri: r.user_id.avatar }} className="h-full w-full rounded-full" />
+                                                ) : (
+                                                    <Text className="text-xs font-bold text-slate-500 dark:text-slate-400">{r.user_id?.name?.[0] || 'U'}</Text>
+                                                )}
+                                            </View>
+                                            <View>
+                                                <Text className="text-sm font-bold text-appText">{r.user_id?.name || 'Người dùng ẩn danh'}</Text>
+                                                <Text className="text-[10px] text-appText/40">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</Text>
+                                            </View>
+                                        </View>
+                                        <View className="flex-row items-center bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1 rounded-lg">
+                                            <Ionicons name="star" size={14} color="#F59E0B" />
+                                            <Text className="ml-1 text-xs font-bold text-yellow-700 dark:text-yellow-500">{r.rating}</Text>
+                                        </View>
+                                    </View>
+                                    {r.comment && (
+                                        <Text className="text-sm text-appText/70 mt-1 leading-5">{r.comment}</Text>
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </View>
             </ScrollView>
 
-            {/* Bottom Sticky Bar */}
-            <View className="absolute bottom-0 left-0 right-0 border-t border-appText/10 bg-appSurface px-5 py-4 flex-row items-center justify-between shadow-lg shadow-black/20" style={{ paddingBottom: 24 }}>
-                <View>
-                    <Text className="text-xs font-medium text-appText/60">
-                        {selectedSlotIndices.length > 0 ? `${selectedSlotIndices.length} slot đã chọn` : `Giờ hoạt động: ${court.open_time || "06:00"} - ${court.close_time || "22:00"}`}
-                    </Text>
-                    <Text className="mt-1 text-xs font-medium text-appText/60">
-                        Giá: <Text className="text-sm font-bold text-emerald-600">
-                            {selectedSlotIndices.length > 0 
-                                ? formatPrice((subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length)
-                                : formatPrice(minPrice) + "/h"}
-                        </Text>
-                    </Text>
+            {/* Review Modal */}
+            <Modal visible={showReviewModal} transparent animationType="slide" onRequestClose={() => setShowReviewModal(false)}>
+                <View className="flex-1 justify-end bg-black/50">
+                    <View className="bg-appBg rounded-t-3xl p-6">
+                        <View className="flex-row items-center justify-between mb-6">
+                            <Text className="text-xl font-bold text-appText">{myReview ? "Sửa đánh giá" : "Viết đánh giá"}</Text>
+                            <TouchableOpacity onPress={() => setShowReviewModal(false)} className="h-8 w-8 items-center justify-center rounded-full bg-appSurface">
+                                <Ionicons name="close" size={20} color={isDark ? "white" : "black"} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text className="text-sm font-medium text-appText/70 text-center mb-3">Chất lượng sân như thế nào?</Text>
+                        <View className="flex-row justify-center gap-2 mb-6">
+                            {[1, 2, 3, 4, 5].map(star => (
+                                <TouchableOpacity key={star} onPress={() => setReviewForm(p => ({ ...p, rating: star }))}>
+                                    <Ionicons name={star <= reviewForm.rating ? "star" : "star-outline"} size={40} color={star <= reviewForm.rating ? "#F59E0B" : (isDark ? "#475569" : "#CBD5E1")} />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text className="text-sm font-semibold text-appText mb-2">Chia sẻ trải nghiệm của bạn (tùy chọn)</Text>
+                        <TextInput
+                            value={reviewForm.comment}
+                            onChangeText={text => setReviewForm(p => ({ ...p, comment: text }))}
+                            placeholder="Sân sạch đẹp, ánh sáng tốt..."
+                            placeholderTextColor={isDark ? "#475569" : "#94A3B8"}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                            className="bg-appSurface border border-appText/10 rounded-xl p-4 text-appText min-h-[100px] mb-6"
+                        />
+
+                        <TouchableOpacity 
+                            onPress={handleSubmitReview}
+                            disabled={isSubmittingReview}
+                            className={`rounded-xl py-3.5 items-center flex-row justify-center ${isSubmittingReview ? 'bg-emerald-600/70' : 'bg-emerald-600'}`}
+                        >
+                            {isSubmittingReview ? <ActivityIndicator size="small" color="white" className="mr-2" /> : null}
+                            <Text className="text-base font-bold text-white">GỬI ĐÁNH GIÁ</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <TouchableOpacity 
-                    onPress={handleBookNow}
-                    className={`rounded-xl px-8 py-3.5 shadow-md flex-row items-center gap-2 ${selectedSlotIndices.length > 0 && !isLocking ? 'bg-emerald-600 shadow-emerald-900/20' : 'bg-appText/20'}`}
-                    disabled={selectedSlotIndices.length === 0 || isLocking}
-                >
-                    {isLocking ? <ActivityIndicator size="small" color="white" /> : null}
-                    <Text className="text-sm font-bold text-white text-center">{isLocking ? "Đang giữ chỗ..." : "Đặt sân ngay"}</Text>
-                </TouchableOpacity>
+            </Modal>
+
+            {/* Bottom Sticky Bar */}
+            <View className="absolute bottom-0 left-0 right-0 border-t border-appText/10 bg-appSurface px-5 py-4 flex-col shadow-lg shadow-black/20" style={{ paddingBottom: 24 }}>
+                {/* Split-pay indicator */}
+                {matchId && (
+                    <View className="flex-row items-center gap-2 mb-3 px-1">
+                        <Ionicons name="people-outline" size={16} color="#059669" />
+                        <Text className="text-xs font-bold text-emerald-600">Đặt sân chia tiền 50/50 — bạn chỉ trả một nửa</Text>
+                    </View>
+                )}
+                <View className="flex-row items-center justify-between">
+                    <View>
+                        <Text className="text-xs font-medium text-appText/60">
+                            {selectedSlotIndices.length > 0 ? `${selectedSlotIndices.length} slot đã chọn` : `Giờ hoạt động: ${court.open_time || "06:00"} - ${court.close_time || "22:00"}`}
+                        </Text>
+                        <Text className="mt-1 text-xs font-medium text-appText/60">
+                            {matchId ? 'Bạn cọc: ' : 'Giá: '}<Text className="text-sm font-bold text-emerald-600">
+                                {selectedSlotIndices.length > 0 
+                                    ? formatPrice(matchId
+                                        ? Math.ceil((subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length / 2)
+                                        : (subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length)
+                                    : formatPrice(minPrice) + "/h"}
+                            </Text>
+                        </Text>
+                    </View>
+                    <TouchableOpacity 
+                        onPress={handleBookNow}
+                        className={`rounded-xl px-8 py-3.5 shadow-md flex-row items-center gap-2 ${selectedSlotIndices.length > 0 && !isLocking 
+                            ? matchId ? 'bg-amber-500 shadow-amber-900/20' : 'bg-emerald-600 shadow-emerald-900/20' 
+                            : 'bg-appText/20'}`}
+                        disabled={selectedSlotIndices.length === 0 || isLocking}
+                    >
+                        {isLocking ? <ActivityIndicator size="small" color="white" /> : null}
+                        <Text className="text-sm font-bold text-white text-center">
+                            {isLocking ? "Đang giữ chỗ..." : matchId ? "Đặt cọc 50%" : "Đặt sân ngay"}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );

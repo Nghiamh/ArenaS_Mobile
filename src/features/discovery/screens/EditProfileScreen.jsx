@@ -93,14 +93,7 @@ export default function EditProfileScreen() {
                             <Ionicons name="camera" size={16} color="white" />
                         </View>
                     </View>
-                    <Text className="mt-3 text-sm text-appText/60">Ảnh đại diện (URL)</Text>
-                    <TextInput
-                        className="w-full mt-2 rounded-xl bg-appSurface border border-appText/10 px-4 py-3 text-appText"
-                        placeholder="Nhập URL ảnh đại diện"
-                        placeholderTextColor="#94A3B8"
-                        value={avatarUrl}
-                        onChangeText={setAvatarUrl}
-                    />
+                    <Text className="mt-3 text-xs text-appText/40">Chạm vào ảnh để thay đổi (Sắp ra mắt)</Text>
                 </View>
 
                 {/* Info Section */}

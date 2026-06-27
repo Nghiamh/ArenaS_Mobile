@@ -10,6 +10,7 @@ const matchmakingApi = {
     checkInMatch: (matchId) => axiosClient.post(`/api/matchmaking/match/${matchId}/check-in`),
     completeMatch: (matchId) => axiosClient.post(`/api/matchmaking/match/${matchId}/complete`),
     submitFeedback: (matchId, data) => axiosClient.post(`/api/matchmaking/match/${matchId}/feedback`, data),
+    reportOpponent: (matchId, data) => axiosClient.post(`/api/matchmaking/match/${matchId}/report`, data),
 };
 
 export default matchmakingApi;

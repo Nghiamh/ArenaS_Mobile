@@ -104,8 +104,11 @@ export default function PaymentScreen() {
     }
 
     const formatPrice = (price) => (price || 0).toLocaleString("vi-VN") + "đ";
+    const isMatchBooking = !!checkoutDraft.matchId;
     const discountAmount = appliedVoucher?.discountAmount || 0;
     const finalAmount = Math.max(0, checkoutDraft.totalPrice - discountAmount);
+    // For match booking: user only pays 50% (ceil for odd amounts)
+    const chargedAmount = isMatchBooking ? Math.ceil(finalAmount / 2) : finalAmount;
 
     // Validate voucher
     const handleValidateVoucher = async (code) => {
@@ -139,8 +142,8 @@ export default function PaymentScreen() {
 
     // Payment
     const handlePayment = async () => {
-        if (walletBalance !== null && walletBalance < finalAmount) {
-            setDepositAmount((finalAmount - walletBalance).toString());
+        if (walletBalance !== null && walletBalance < chargedAmount) {
+            setDepositAmount((chargedAmount - walletBalance).toString());
             setShowDepositModal(true);
             return;
         }
@@ -153,9 +156,15 @@ export default function PaymentScreen() {
                 start_time: checkoutDraft.startTime,
                 end_time: checkoutDraft.endTime,
                 voucher_code: appliedVoucher?.voucher?.code || undefined,
+                ...(isMatchBooking ? { match_id: checkoutDraft.matchId } : {}),
             };
             await bookingApi.userBookCourt(data);
-            Alert.alert("Thành công 🎉", "Đặt sân thành công! Tiền đã được trừ từ ví.");
+            Alert.alert(
+                isMatchBooking ? "Đặt cọc thành công! 🎉" : "Thành công 🎉",
+                isMatchBooking
+                    ? `Bạn đã đặt cọc ${formatPrice(chargedAmount)} (50%). Đối thủ có 30 phút để thanh toán phần còn lại.`
+                    : "Đặt sân thành công! Tiền đã được trừ từ ví."
+            );
             dispatch(resetBooking());
             navigation.navigate("Trang chủ");
         } catch (error) {
@@ -207,6 +216,13 @@ export default function PaymentScreen() {
                         </View>
                     </View>
                     <View className="gap-2.5">
+                        {/* Split-pay badge */}
+                        {isMatchBooking && (
+                            <View className="flex-row items-center gap-2 mb-1 px-1 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/40">
+                                <Ionicons name="people-outline" size={16} color="#D97706" />
+                                <Text className="text-xs font-bold text-amber-700 dark:text-amber-400">Đặt sân chia tiền — mỗi người trả 50%</Text>
+                            </View>
+                        )}
                         <View className="flex-row justify-between">
                             <Text className="text-sm text-appText/60">Ngày</Text>
                             <Text className="text-sm font-bold text-appText">{new Date(checkoutDraft.date + 'T00:00:00').toLocaleDateString("vi-VN", { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</Text>
@@ -226,10 +242,23 @@ export default function PaymentScreen() {
                             </View>
                         ) : null}
                         <View className="h-px bg-appText/10 my-1" />
-                        <View className="flex-row justify-between">
-                            <Text className="text-sm font-bold text-appText">Tổng cộng</Text>
-                            <Text className="text-base font-bold text-emerald-600">{formatPrice(finalAmount)}</Text>
-                        </View>
+                        {isMatchBooking ? (
+                            <>
+                                <View className="flex-row justify-between">
+                                    <Text className="text-sm text-appText/60">Tổng tiền sân</Text>
+                                    <Text className="text-sm font-bold text-appText">{formatPrice(finalAmount)}</Text>
+                                </View>
+                                <View className="flex-row justify-between">
+                                    <Text className="text-sm font-bold text-amber-600">Bạn đặt cọc (50%)</Text>
+                                    <Text className="text-base font-bold text-amber-600">{formatPrice(chargedAmount)}</Text>
+                                </View>
+                            </>
+                        ) : (
+                            <View className="flex-row justify-between">
+                                <Text className="text-sm font-bold text-appText">Tổng cộng</Text>
+                                <Text className="text-base font-bold text-emerald-600">{formatPrice(finalAmount)}</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -296,13 +325,15 @@ export default function PaymentScreen() {
             {/* Bottom bar */}
             <View className="absolute bottom-0 left-0 right-0 border-t border-appText/10 bg-[#F8FAFC] dark:bg-appBg px-5 py-4" style={{ paddingBottom: 24 }}>
                 <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-xs font-semibold text-appText/60">Tổng thanh toán</Text>
-                    <Text className="text-xl font-bold text-appText">{formatPrice(finalAmount)}</Text>
+                    <Text className="text-xs font-semibold text-appText/60">
+                        {isMatchBooking ? 'Số tiền đặt cọc (50%)' : 'Tổng thanh toán'}
+                    </Text>
+                    <Text className="text-xl font-bold text-appText">{formatPrice(chargedAmount)}</Text>
                 </View>
-                {walletBalance !== null && walletBalance < finalAmount ? (
+                {walletBalance !== null && walletBalance < chargedAmount ? (
                     <TouchableOpacity 
                         onPress={() => {
-                            setDepositAmount((finalAmount - walletBalance).toString());
+                            setDepositAmount((chargedAmount - walletBalance).toString());
                             setShowDepositModal(true);
                         }}
                         className="rounded-xl py-3.5 shadow-md flex-row items-center justify-center bg-amber-500 shadow-amber-900/20"
@@ -313,10 +344,16 @@ export default function PaymentScreen() {
                     <TouchableOpacity 
                         onPress={handlePayment}
                         disabled={isBooking}
-                        className={`rounded-xl py-3.5 shadow-md flex-row items-center justify-center ${isBooking ? 'bg-emerald-600/70' : 'bg-[#007F3F] dark:bg-emerald-700 shadow-emerald-900/20'}`}
+                        className={`rounded-xl py-3.5 shadow-md flex-row items-center justify-center ${
+                            isBooking ? 'bg-emerald-600/70' 
+                            : isMatchBooking ? 'bg-amber-500 shadow-amber-900/20'
+                            : 'bg-[#007F3F] dark:bg-emerald-700 shadow-emerald-900/20'
+                        }`}
                     >
                         {isBooking ? <ActivityIndicator color="white" className="mr-2" /> : null}
-                        <Text className="text-base font-bold text-white text-center">THANH TOÁN NGAY</Text>
+                        <Text className="text-base font-bold text-white text-center">
+                            {isMatchBooking ? 'ĐẶT CỌC 50% NGAY' : 'THANH TOÁN NGAY'}
+                        </Text>
                     </TouchableOpacity>
                 )}
             </View>
