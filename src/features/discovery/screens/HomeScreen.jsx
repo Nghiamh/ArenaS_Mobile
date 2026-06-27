@@ -1,129 +1,23 @@
 import { useEffect, useState } from "react";
-import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Alert, Image, ActivityIndicator } from "react-native";
+import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Image, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { logout, fetchUserProfile } from "../../../store/slices/authSlice";
-import { removeItem } from "../../../utils/storage";
-import { STORAGE_KEYS } from "../../../constants/config";
+import { fetchUserProfile } from "../../../store/slices/authSlice";
 import { fetchCourts } from "../../../store/slices/venueSlice";
-
-// Mapping icon cho các loại sân (key = tên tiếng Anh từ BE)
-const SPORT_ICONS = {
-    "football": "soccer",
-    "badminton": "badminton",
-    "tennis": "tennis",
-    "pickleball": "table-tennis",
-    "basketball": "basketball",
-    "volleyball": "volleyball",
-    "default": "soccer",
-};
-
-// Mapping màu nền cho từng loại sân
-const SPORT_TONES = {
-    "football": "bg-[#1A4D63]",
-    "badminton": "bg-[#5B3D77]",
-    "tennis": "bg-[#14532D]",
-    "pickleball": "bg-[#1D4ED8]",
-    "basketball": "bg-[#B45309]",
-    "volleyball": "bg-[#9333EA]",
-    "default": "bg-[#334155]",
-};
-
-// Mapping tên tiếng Việt
-const SPORT_NAMES_VI = {
-    "football": "Bóng đá",
-    "badminton": "Cầu lông",
-    "tennis": "Tennis",
-    "pickleball": "Pickleball",
-    "basketball": "Bóng rổ",
-    "volleyball": "Bóng chuyền",
-};
-
-// Placeholder image khi sân không có ảnh
-const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?q=80&w=400&auto=format&fit=crop";
-
-/**
- * Helper: lấy icon name cho loại sân
- */
-function getSportIcon(sportKey) {
-    if (!sportKey) return SPORT_ICONS.default;
-    return SPORT_ICONS[sportKey.toLowerCase()] || SPORT_ICONS.default;
-}
-
-/**
- * Helper: lấy màu nền cho loại sân
- */
-function getSportTone(sportKey) {
-    if (!sportKey) return SPORT_TONES.default;
-    return SPORT_TONES[sportKey.toLowerCase()] || SPORT_TONES.default;
-}
-
-/**
- * Helper: lấy tên tiếng Việt cho sport
- */
-function getSportNameVI(sportKey) {
-    if (!sportKey) return "Khác";
-    return SPORT_NAMES_VI[sportKey.toLowerCase()] || sportKey;
-}
-
-/**
- * Helper: lấy ảnh đầu tiên từ court
- */
-function getCourtImage(court) {
-    if (court.images && court.images.length > 0) return court.images[0];
-    if (court.image) return court.image;
-    if (court.thumbnail) return court.thumbnail;
-    return PLACEHOLDER_IMAGE;
-}
-
-/**
- * Helper: format giá tiền
- */
-function formatPrice(price) {
-    if (!price && price !== 0) return "Liên hệ";
-    const num = typeof price === "string" ? parseInt(price, 10) : price;
-    if (isNaN(num)) return price;
-    return num.toLocaleString("vi-VN") + "đ/giờ";
-}
-
-/**
- * Helper: lấy sport chính của sân (BE trả sports: ["football"])
- */
-function getCourtSport(court) {
-    if (court.sports && court.sports.length > 0) return court.sports[0];
-    return court.sport || court.sportType || court.type || court.category || "";
-}
-
-/**
- * Helper: nhóm các sân theo loại thể thao (để hiển thị section "Môn thể thao")
- */
-function groupBySport(courts) {
-    const sportMap = {};
-    courts.forEach((court) => {
-        // Mỗi sân có thể có nhiều sport
-        const sports = court.sports && court.sports.length > 0
-            ? court.sports
-            : [getCourtSport(court) || "other"];
-        sports.forEach((sport) => {
-            const key = sport.toLowerCase();
-            if (!sportMap[key]) {
-                sportMap[key] = { key, name: getSportNameVI(key), count: 0 };
-            }
-            sportMap[key].count++;
-        });
-    });
-    return Object.values(sportMap);
-}
+import {
+    getSportIcon, getSportTone, getSportNameVI,
+    getCourtImage, formatPrice, groupBySport,
+} from "../../../utils/courtHelpers";
+import AppHeader from "../../../components/AppHeader";
 
 export default function HomeScreen() {
-    const { colorScheme, toggleColorScheme } = useColorScheme();
+    const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
-    const iconColor = isDark ? "#FFFFFF" : "#000000";
     const navigation = useNavigation();
     const dispatch = useDispatch();
-    const { token, isGuest, user } = useSelector((state) => state.auth);
+    const { token, isGuest } = useSelector((state) => state.auth);
     const { venues: courts, status, error } = useSelector((state) => state.venue);
 
     const isLoggedIn = !!token && !isGuest;
@@ -171,48 +65,7 @@ export default function HomeScreen() {
     return (
         <SafeAreaView className="flex-1 bg-appBg">
             <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10 pt-2">
-                <View className="flex-row items-center justify-end min-h-[48px] mb-2">
-                    <View className="absolute inset-0 items-center justify-center z-0" pointerEvents="none">
-                        <Image
-                            source={require('../../../../assets/Img/bannerNoBg.JPG.png')}
-                            className="h-28 w-64"
-                            resizeMode="contain"
-                        />
-                    </View>
-
-                    <View className="flex-row items-center gap-2 z-10">
-                        {!isLoggedIn && (
-                            <TouchableOpacity
-                                onPress={() => navigation.navigate("Đăng nhập")}
-                                className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
-                            >
-                                <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Đăng nhập</Text>
-                            </TouchableOpacity>
-                        )}
-                        {isLoggedIn ? (
-                            <>
-                                <TouchableOpacity
-                                    onPress={() => navigation.navigate("Thông báo")}
-                                    className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10 relative"
-                                >
-                                    <Ionicons name="notifications-outline" size={18} color={iconColor} />
-                                    {/* Giả lập có thông báo */}
-                                    <View className="absolute top-1.5 right-2 h-2.5 w-2.5 rounded-full bg-red-500 border border-appSurface" />
-                                </TouchableOpacity>
-                            </>
-                        ) : null}
-                        <TouchableOpacity
-                            onPress={toggleColorScheme}
-                            className="h-9 w-9 items-center justify-center rounded-full bg-appSurface border border-appText/10"
-                        >
-                            <MaterialCommunityIcons
-                                name={isDark ? "weather-sunny" : "weather-night"}
-                                size={18}
-                                color={iconColor}
-                            />
-                        </TouchableOpacity>
-                    </View>
-                </View>
+                <AppHeader />
 
                 <View className="mt-5 flex-row items-center gap-3">
                     <View className="flex-1 flex-row items-center rounded-full border border-appText/10 bg-appSurface px-4 py-1.5">
@@ -325,7 +178,7 @@ export default function HomeScreen() {
                                             </View>
                                             <View className="mt-3 flex-row items-center justify-between gap-2">
                                                 <Text className="flex-1 text-sm font-bold text-emerald-400" numberOfLines={1}>
-                                                    {formatPrice(court.price_per_hour || court.price || court.pricePerHour)}
+                                                    {formatPrice(court.price_per_hour || court.price || court.pricePerHour, "đ/giờ")}
                                                 </Text>
                                                 <View className="rounded-full bg-emerald-600 px-4 py-1.5 justify-center items-center">
                                                     <Text className="text-[13px] font-bold text-white">Đặt</Text>

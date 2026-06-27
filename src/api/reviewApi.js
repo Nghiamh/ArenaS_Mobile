@@ -1,6 +1,6 @@
 import axiosClient from "./axiosClient";
 
-export const reviewApi = {
+const reviewApi = {
     // Lấy danh sách đánh giá của một sân
     getCourtReviews: (courtId) => {
         return axiosClient.get(`/api/reviews/court/${courtId}`);
@@ -31,3 +31,5 @@ export const reviewApi = {
         return axiosClient.delete(`/api/reviews/${reviewId}`);
     },
 };
+
+export default reviewApi;

@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { logout, fetchUserProfile } from "../../../store/slices/authSlice";
 import { removeItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
+import { formatPrice } from "../../../utils/courtHelpers";
 import bookingApi from "../../../api/bookingApi";
 import matchmakingApi from "../../../api/matchmakingApi";
 import React from "react";
@@ -76,7 +77,6 @@ export default function ProfileScreen() {
         ? processedBookings
         : processedBookings.filter(b => (b.displayStatus === "confirmed" || b.displayStatus === "pending") && b.date >= todayStr);
 
-    const formatPrice = (p) => (p || 0).toLocaleString("vi-VN") + "đ";
 
     const handleCancelBooking = (booking) => {
         const startDateTime = new Date(`${booking.date}T${booking.start_time || booking.startTime}:00`);
@@ -161,7 +161,7 @@ export default function ProfileScreen() {
                     onPress: async () => {
                         await removeItem(STORAGE_KEYS.authToken);
                         await removeItem(STORAGE_KEYS.guestMode);
-                        await removeItem("user");
+                        await removeItem(STORAGE_KEYS.user);
                         dispatch(logout());
                         // Có thể cần điều hướng về màn hình đăng nhập nếu app không tự reload
                     }

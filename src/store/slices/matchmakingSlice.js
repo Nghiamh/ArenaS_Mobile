@@ -1,12 +1,11 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { logout } from "./authSlice";
 
 const initialState = {
     status: "IDLE", // IDLE, WAITING, MATCHED, CONFIRMED
     matchData: null,
     searchStartTime: null, // to calculate elapsed time
 };
-
-import { logout } from "./authSlice";
 
 const matchmakingSlice = createSlice({
     name: "matchmaking",

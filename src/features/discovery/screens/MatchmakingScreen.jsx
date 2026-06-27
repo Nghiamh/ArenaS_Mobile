@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, Text, TouchableOpacity, Alert, ActivityIndicator, Animated, Easing, Image } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -19,6 +19,7 @@ export default function MatchmakingScreen() {
     const [selectedCourt, setSelectedCourt] = useState(null);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showReportModal, setShowReportModal] = useState(false);
+    const pollRef = useRef(null);  // useRef để tránh race condition với polling
 
     useEffect(() => {
         if (route.params?.selectedCourtId) {
@@ -70,9 +71,8 @@ export default function MatchmakingScreen() {
 
     // Polling trạng thái khi đang WAITING hoặc MATCHED
     useEffect(() => {
-        let pollInterval;
         if (status === "WAITING" || status === "MATCHED") {
-            pollInterval = setInterval(async () => {
+            pollRef.current = setInterval(async () => {
                 try {
                     const res = await matchmakingApi.getStatus();
                     if (res.data?.status === "MATCHED") {
@@ -85,11 +85,17 @@ export default function MatchmakingScreen() {
                         if (match) dispatch(setMatchData(match));
                     }
                 } catch (err) {
-                    // Ignore
+                    // Ignore network errors during polling
                 }
             }, 5000);
+        } else {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
         }
-        return () => clearInterval(pollInterval);
+        return () => {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        };
     }, [status, dispatch]);
 
     // Kiểm tra trạng thái một lần khi vào màn hình

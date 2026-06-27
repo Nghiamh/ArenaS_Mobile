@@ -132,7 +132,7 @@ export default function LoginScreen() {
 
             if (token) {
                 await setItem(STORAGE_KEYS.authToken, token);
-                await setItem("user", JSON.stringify(user));
+                await setItem(STORAGE_KEYS.user, JSON.stringify(user));
                 dispatch(setCredentials({ user, token }));
             }
         } catch (error) {
@@ -164,7 +164,7 @@ export default function LoginScreen() {
 
             if (token) {
                 await setItem(STORAGE_KEYS.authToken, token);
-                await setItem("user", JSON.stringify(user));
+                await setItem(STORAGE_KEYS.user, JSON.stringify(user));
                 dispatch(setCredentials({ user, token }));
             }
         } catch (error) {

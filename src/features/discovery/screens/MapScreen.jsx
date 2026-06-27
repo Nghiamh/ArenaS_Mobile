@@ -23,36 +23,28 @@ export default function MapScreen() {
     const lng = longitude || 106.660172;
     const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
+    /**
+     * Helper: lấy vị trí GPS với timeout 3s, fallback về HCM
+     * @returns {{ lat: number, lng: number }}
+     */
+    const getLocationWithFallback = async () => {
+        const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
+        if (permStatus !== 'granted') throw new Error('permission_denied');
+        const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Location timeout")), 3000)
+        );
+        const location = await Promise.race([locationPromise, timeoutPromise]);
+        return { lat: location.coords.latitude, lng: location.coords.longitude };
+    };
+
     useEffect(() => {
         (async () => {
             try {
-                let { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    console.log("Permission to access location was denied");
-                    setIsLoadingLoc(false);
-                    return;
-                }
-                
-                // Ép lấy vị trí mới nhất, có timeout 3 giây để tránh bị treo trên Emulator
-                const locationPromise = Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                });
-                
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error("Location timeout")), 3000)
-                );
-
-                let location = await Promise.race([locationPromise, timeoutPromise]);
-                
-                if (location && location.coords) {
-                    setUserLocation({
-                        lat: location.coords.latitude,
-                        lng: location.coords.longitude
-                    });
-                }
+                const coords = await getLocationWithFallback();
+                setUserLocation(coords);
             } catch (error) {
-                console.log("Không lấy được GPS (Timeout hoặc tắt GPS), dùng mặc định HCM");
-                // Fallback vị trí ảo ở TPHCM nếu không lấy được GPS
+                console.log("[MapScreen] GPS fallback to HCM:", error.message);
                 setUserLocation({ lat: 10.762622, lng: 106.660172 });
             } finally {
                 setIsLoadingLoc(false);
@@ -309,39 +301,26 @@ export default function MapScreen() {
     const handleUseMyLocation = async () => {
         setIsSearching(true);
         try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert("Lỗi", "Bạn chưa cấp quyền vị trí.");
-                return;
-            }
-            const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("Location timeout")), 3000)
-            );
-            
-            let location = await Promise.race([locationPromise, timeoutPromise]);
-            const lat = location.coords.latitude;
-            const lng = location.coords.longitude;
-            
+            const coords = await getLocationWithFallback();
             if (webViewRef.current) {
                 webViewRef.current.injectJavaScript(`
                     if (window.userMarker) {
-                        window.userMarker.setLngLat([${lng}, ${lat}]);
+                        window.userMarker.setLngLat([${coords.lng}, ${coords.lat}]);
                     } else {
                         const userEl = document.createElement('div');
                         userEl.className = 'user-marker';
                         window.userMarker = new mapboxgl.Marker({ element: userEl })
-                            .setLngLat([${lng}, ${lat}])
+                            .setLngLat([${coords.lng}, ${coords.lat}])
                             .addTo(map);
                     }
-                    map.flyTo({ center: [${lng}, ${lat}], zoom: 14 });
+                    map.flyTo({ center: [${coords.lng}, ${coords.lat}], zoom: 14 });
                     true;
                 `);
             }
         } catch (e) {
-            Alert.alert("Cảnh báo", "Không lấy được vị trí thực tế. Đã đặt vị trí giả định tại trung tâm TP.HCM. Bạn có thể nhập địa chỉ thủ công.");
             const hcmLat = 10.762622;
             const hcmLng = 106.660172;
+            Alert.alert("Cảnh báo", "Không lấy được vị trí thực tế. Đã dùng vị trí mặc định TP.HCM.");
             if (webViewRef.current) {
                 webViewRef.current.injectJavaScript(`
                     if (window.userMarker) {

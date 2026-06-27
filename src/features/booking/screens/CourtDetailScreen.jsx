@@ -7,25 +7,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchCourtById } from "../../../store/slices/venueSlice";
 import { setCheckoutDraft } from "../../../store/slices/bookingSlice";
 import bookingApi from "../../../api/bookingApi";
-import { reviewApi } from "../../../api/reviewApi";
+import reviewApi from "../../../api/reviewApi";
+import { getSportNameVI, getCourtSport, formatPrice } from "../../../utils/courtHelpers";
 
 const { width } = Dimensions.get("window");
 
-// Placeholder image
-const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?q=80&w=1000&auto=format&fit=crop";
-
-// Mapping tên tiếng Việt cho sport
-const SPORT_NAMES_VI = {
-    "football": "Bóng đá",
-    "football_5": "Bóng đá 5",
-    "football_7": "Bóng đá 7",
-    "football_11": "Bóng đá 11",
-    "badminton": "Cầu lông",
-    "tennis": "Tennis",
-    "pickleball": "Pickleball",
-    "basketball": "Bóng rổ",
-    "volleyball": "Bóng chuyền",
-};
 
 // Mapping amenity → icon
 const AMENITY_ICONS = {
@@ -40,17 +26,6 @@ const AMENITY_ICONS = {
     "nước uống": { icon: "cup-water", label: "Nước uống" },
 };
 
-function getSportNameVI(key) {
-    if (!key) return "Khác";
-    return SPORT_NAMES_VI[key.toLowerCase()] || key;
-}
-
-function formatPrice(price) {
-    if (!price && price !== 0) return "Liên hệ";
-    const num = typeof price === "string" ? parseInt(price, 10) : price;
-    if (isNaN(num)) return price;
-    return num.toLocaleString("vi-VN") + "đ";
-}
 
 function getAmenityIcon(amenity) {
     const key = amenity.toLowerCase();
