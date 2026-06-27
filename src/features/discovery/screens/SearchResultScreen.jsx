@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { SafeAreaView, View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from "react-native";
+import { useEffect, useState } from "react";
+import { SafeAreaView, View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -20,6 +20,14 @@ export default function SearchResultScreen() {
     const query = route.params?.query || "";
     const matchId = route.params?.matchId || null;
 
+    // Search state – cho phép người dùng lọc ngay tại màn hình này
+    const [searchText, setSearchText] = useState(query);
+    const [activeSearch, setActiveSearch] = useState(query);
+
+    const handleSearch = () => {
+        setActiveSearch(searchText.trim());
+    };
+
     const { venues: courts, status, error } = useSelector((state) => state.venue);
     const isLoading = status === "loading";
 
@@ -30,7 +38,7 @@ export default function SearchResultScreen() {
         }
     }, [dispatch, courts.length]);
 
-    // Lọc theo sport hoặc query nếu có
+    // Lọc theo sport hoặc searchText (ưu tiên search local)
     const filteredCourts = courts.filter((c) => {
         let matchesSport = true;
         let matchesQuery = true;
@@ -40,8 +48,8 @@ export default function SearchResultScreen() {
             matchesSport = sports.some((s) => s.toLowerCase().includes(sportName.toLowerCase()));
         }
 
-        if (query) {
-            const q = query.toLowerCase();
+        const q = (activeSearch || "").toLowerCase();
+        if (q) {
             const nameMatch = (c.name || "").toLowerCase().includes(q);
             const addressMatch = (c.location || c.address || "").toLowerCase().includes(q);
             const sportMatch = (c.sports || []).some(s => s.toLowerCase().includes(q));
@@ -56,6 +64,33 @@ export default function SearchResultScreen() {
             <View className="flex-1 pt-2">
                 {/* Header dùng chung – có nút back */}
                 <AppHeader showBack containerClassName="px-4" />
+
+                {/* Thanh tìm kiếm */}
+                <View className="mx-4 mb-3 flex-row items-center gap-2">
+                    <View className="flex-1 flex-row items-center rounded-full border border-appText/10 bg-appSurface px-4 py-2">
+                        <Ionicons name="search-outline" size={18} color={isDark ? "#94A3B8" : "#64748B"} style={{ marginRight: 8 }} />
+                        <TextInput
+                            placeholder="Tìm sân, địa chỉ, môn thể thao..."
+                            placeholderTextColor="#94A3B8"
+                            className="flex-1 text-sm text-appText"
+                            value={searchText}
+                            onChangeText={setSearchText}
+                            onSubmitEditing={handleSearch}
+                            returnKeyType="search"
+                        />
+                        {searchText.length > 0 && (
+                            <TouchableOpacity onPress={() => { setSearchText(""); setActiveSearch(""); }}>
+                                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    <TouchableOpacity
+                        onPress={handleSearch}
+                        className="h-10 w-10 items-center justify-center rounded-full bg-emerald-600"
+                    >
+                        <Ionicons name="search" size={18} color="white" />
+                    </TouchableOpacity>
+                </View>
 
                 {/* Split-pay banner khi đến từ Chat */}
                 {matchId && (
