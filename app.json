@@ -33,8 +33,12 @@
       "expo-font",
       "expo-asset",
       "@react-native-community/datetimepicker",
-      "@rnmapbox/maps",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "88643c8f-7a3f-4aac-97b7-2388531c7ced"
+      }
+    }
   }
 }
