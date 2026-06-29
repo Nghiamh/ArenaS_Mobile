@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, StyleSheet, ActivityIndicator, Text, TextInput, TouchableOpacity, Alert, Linking } from "react-native";
+import { View, StyleSheet, ActivityIndicator, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import { WebView } from "react-native-webview";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -24,7 +24,7 @@ export default function MapScreen() {
     const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
     /**
-     * Helper: lấy vị trí GPS với timeout 3s, fallback về HCM
+     * Helper: lấy vị trí GPS với timeout 5s, fallback về HCM
      * @returns {{ lat: number, lng: number }}
      */
     const getLocationWithFallback = async () => {
@@ -32,7 +32,7 @@ export default function MapScreen() {
         if (permStatus !== 'granted') throw new Error('permission_denied');
         const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Location timeout")), 3000)
+            setTimeout(() => reject(new Error("Location timeout")), 5000)
         );
         const location = await Promise.race([locationPromise, timeoutPromise]);
         return { lat: location.coords.latitude, lng: location.coords.longitude };
@@ -81,7 +81,7 @@ export default function MapScreen() {
                         <div class="popup-rating">⭐ ${v.avg_rating || "0.0"}</div>
                     </div>
                     <button class="btn-primary" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: '${mode === 'selectForMatchmaking' ? 'SELECT_COURT' : 'VIEW_DETAIL'}', id: '${v.id || v._id}', name: '${(v.name || "").replace(/'/g, "\\'")}'}))">${mode === 'selectForMatchmaking' ? 'Chọn sân này' : 'Xem chi tiết'}</button>
-                    <button class="btn-outline" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: 'DIRECTIONS', lat: ${v.coordinates.latitude}, lng: ${v.coordinates.longitude}}))">Chỉ đường</button>
+                    <button class="btn-outline" onclick="drawRoute(${v.coordinates.latitude}, ${v.coordinates.longitude})">Chỉ đường</button>
                 </div>
             `;
             const safePopupHtml = popupHtml.replace(/[\r\n]+/g, '').replace(/'/g, "\\'");
@@ -90,7 +90,7 @@ export default function MapScreen() {
                 {
                     const el = document.createElement('div');
                     el.className = 'marker-icon';
-                    el.style.backgroundColor = '${venueName === v.name ? "#EF4444" : "#3B82F6"}'; // Đỏ nếu đang chọn, Xanh nếu bth
+                    el.style.backgroundColor = '${venueName === v.name ? "#EF4444" : "#3B82F6"}';
                     
                     const popup = new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML('${safePopupHtml}');
                     
@@ -111,8 +111,8 @@ export default function MapScreen() {
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-            <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
-            <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+            <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+            <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
             <style>
                 body { margin: 0; padding: 0; }
                 #map { position: absolute; top: 0; bottom: 0; width: 100%; }
@@ -206,14 +206,43 @@ export default function MapScreen() {
                     padding: 10px;
                     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
                 }
+                /* Route info bar */
+                .route-info {
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    background: white;
+                    padding: 12px 16px;
+                    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+                    display: none;
+                    z-index: 999;
+                    border-radius: 16px 16px 0 0;
+                }
+                .route-info.active { display: flex; align-items: center; justify-content: space-between; }
+                .route-info .info-text { font-size: 14px; color: #111827; }
+                .route-info .info-text strong { color: #059669; }
+                .route-info .btn-close-route {
+                    background: #EF4444;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 13px;
+                    cursor: pointer;
+                }
             </style>
         </head>
         <body>
             <div id="map"></div>
+            <div class="route-info" id="routeInfo">
+                <div class="info-text" id="routeText"></div>
+                <button class="btn-close-route" onclick="clearRoute()">Đóng</button>
+            </div>
             <script>
                 mapboxgl.accessToken = '${mapboxToken}';
                 
-                // Quyết định center map (Ưu tiên: Params -> User Location -> Mặc định)
                 let centerLng = ${lng};
                 let centerLat = ${lat};
                 ${userLocation && !venueName ? `
@@ -229,20 +258,84 @@ export default function MapScreen() {
                     pitch: 0
                 });
 
-                // Add User Location Marker
+                map.on('error', function(e) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_ERROR', error: e.error ? e.error.message : 'Unknown' }));
+                });
+
+                // User location marker
                 ${userLocation ? `
                     const userEl = document.createElement('div');
                     userEl.className = 'user-marker';
                     window.userMarker = new mapboxgl.Marker({ element: userEl })
                         .setLngLat([${userLocation.lng}, ${userLocation.lat}])
                         .addTo(map);
-                ` : ''}
+                    window.userLat = ${userLocation.lat};
+                    window.userLng = ${userLocation.lng};
+                ` : `
+                    window.userLat = ${lat};
+                    window.userLng = ${lng};
+                `}
 
-                // Render all venues
+                // Render all venue markers
                 ${markersJs}
 
-                // Thêm control điều hướng (zoom in/out)
                 map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+                // ── In-app directions (giống Grab) ──
+                function drawRoute(destLat, destLng) {
+                    var origin = window.userLng + ',' + window.userLat;
+                    var dest = destLng + ',' + destLat;
+                    var url = 'https://api.mapbox.com/directions/v5/mapbox/driving/' + origin + ';' + dest + '?geometries=geojson&overview=full&access_token=' + mapboxgl.accessToken;
+                    
+                    fetch(url)
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (!data.routes || data.routes.length === 0) {
+                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ROUTE_ERROR' }));
+                                return;
+                            }
+                            var route = data.routes[0];
+                            var coords = route.geometry;
+                            var distKm = (route.distance / 1000).toFixed(1);
+                            var durMin = Math.round(route.duration / 60);
+
+                            // Remove old route if exists
+                            if (map.getSource('route')) {
+                                map.removeLayer('route-line');
+                                map.removeSource('route');
+                            }
+
+                            map.addSource('route', { type: 'geojson', data: { type: 'Feature', geometry: coords } });
+                            map.addLayer({
+                                id: 'route-line',
+                                type: 'line',
+                                source: 'route',
+                                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                                paint: { 'line-color': '#059669', 'line-width': 5, 'line-opacity': 0.85 }
+                            });
+
+                            // Fit map to route
+                            var allCoords = coords.coordinates;
+                            var bounds = new mapboxgl.LngLatBounds(allCoords[0], allCoords[0]);
+                            allCoords.forEach(function(c) { bounds.extend(c); });
+                            map.fitBounds(bounds, { padding: 60 });
+
+                            // Show route info bar
+                            document.getElementById('routeText').innerHTML = '<strong>' + distKm + ' km</strong> &bull; ' + durMin + ' phút lái xe';
+                            document.getElementById('routeInfo').className = 'route-info active';
+                        })
+                        .catch(function(err) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ROUTE_ERROR' }));
+                        });
+                }
+
+                function clearRoute() {
+                    if (map.getSource('route')) {
+                        map.removeLayer('route-line');
+                        map.removeSource('route');
+                    }
+                    document.getElementById('routeInfo').className = 'route-info';
+                }
             </script>
         </body>
         </html>
@@ -255,9 +348,10 @@ export default function MapScreen() {
                 navigation.navigate("Đặt lịch", { courtId: data.id });
             } else if (data.type === 'SELECT_COURT') {
                 navigation.navigate("Ghép Kèo", { selectedCourtId: data.id, selectedCourtName: data.name });
-            } else if (data.type === 'DIRECTIONS') {
-                const url = `https://www.google.com/maps/dir/?api=1&destination=${data.lat},${data.lng}`;
-                Linking.openURL(url);
+            } else if (data.type === 'ROUTE_ERROR') {
+                Alert.alert("Lỗi", "Không thể tìm đường đi. Vui lòng thử lại.");
+            } else if (data.type === 'MAP_ERROR') {
+                console.warn("[MapScreen] Map error:", data.error);
             }
         } catch (error) {
             console.error("Lỗi parse message từ WebView", error);
@@ -272,7 +366,6 @@ export default function MapScreen() {
             const data = await res.json();
             if (data.features && data.features.length > 0) {
                 const [lng, lat] = data.features[0].geometry.coordinates;
-                // Update map via JS injection to avoid reloading WebView
                 if (webViewRef.current) {
                     webViewRef.current.injectJavaScript(`
                         if (window.userMarker) {
@@ -284,6 +377,8 @@ export default function MapScreen() {
                                 .setLngLat([${lng}, ${lat}])
                                 .addTo(map);
                         }
+                        window.userLat = ${lat};
+                        window.userLng = ${lng};
                         map.flyTo({ center: [${lng}, ${lat}], zoom: 14 });
                         true;
                     `);
@@ -313,6 +408,8 @@ export default function MapScreen() {
                             .setLngLat([${coords.lng}, ${coords.lat}])
                             .addTo(map);
                     }
+                    window.userLat = ${coords.lat};
+                    window.userLng = ${coords.lng};
                     map.flyTo({ center: [${coords.lng}, ${coords.lat}], zoom: 14 });
                     true;
                 `);
@@ -332,6 +429,8 @@ export default function MapScreen() {
                             .setLngLat([${hcmLng}, ${hcmLat}])
                             .addTo(map);
                     }
+                    window.userLat = ${hcmLat};
+                    window.userLng = ${hcmLng};
                     map.flyTo({ center: [${hcmLng}, ${hcmLat}], zoom: 14 });
                     true;
                 `);
@@ -359,6 +458,9 @@ export default function MapScreen() {
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
                 onMessage={handleMessage}
+                androidHardwareAccelerationDisabled={false}
+                mixedContentMode="compatibility"
+                allowFileAccess={true}
             />
             
             {/* Search Overlay */}

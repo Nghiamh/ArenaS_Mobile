@@ -33,7 +33,15 @@
       "expo-font",
       "expo-asset",
       "@react-native-community/datetimepicker",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cho phép ArenaS truy cập vị trí của bạn để tìm sân gần nhất.",
+          "locationAlwaysPermission": "Cho phép ArenaS truy cập vị trí của bạn để tìm sân gần nhất.",
+          "locationWhenInUsePermission": "Cho phép ArenaS truy cập vị trí của bạn để tìm sân gần nhất."
+        }
+      ]
     ],
     "extra": {
       "eas": {

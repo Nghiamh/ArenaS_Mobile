@@ -1,4 +1,4 @@
-package com.anonymous.arenas
+package com.arenas.mobile
 
 import android.app.Application
 import android.content.res.Configuration
