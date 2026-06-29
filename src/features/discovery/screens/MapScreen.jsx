@@ -30,9 +30,18 @@ export default function MapScreen() {
     const getLocationWithFallback = async () => {
         const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
         if (permStatus !== 'granted') throw new Error('permission_denied');
-        const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+
+        // 1) Thử lấy vị trí đã cache (gần như instant)
+        const lastKnown = await Location.getLastKnownPositionAsync();
+        if (lastKnown && lastKnown.coords) {
+            console.log("[MapScreen] Dùng vị trí cached");
+            return { lat: lastKnown.coords.latitude, lng: lastKnown.coords.longitude };
+        }
+
+        // 2) Fallback: lấy GPS thật với timeout 15s, accuracy thấp cho nhanh
+        const locationPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Location timeout")), 5000)
+            setTimeout(() => reject(new Error("Location timeout")), 15000)
         );
         const location = await Promise.race([locationPromise, timeoutPromise]);
         return { lat: location.coords.latitude, lng: location.coords.longitude };

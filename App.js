@@ -2,6 +2,7 @@ import "react-native-gesture-handler";
 import "./global.css";
 
 import { useState } from "react";
+import { View } from "react-native";
 import { NavigationContainer, DefaultTheme, useNavigationContainerRef } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -13,12 +14,21 @@ import { store } from "./src/store";
 import AppNavigator from "./src/navigation/AppNavigator";
 import MatchmakingOverlay from "./src/components/MatchmakingOverlay";
 import { themeTokens } from "./src/constants/theme";
+import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
+
+// Disable Reanimated strict mode to hide "Writing to `value` during component render" 
+// warnings caused by NativeWind v4 updating shared values during render.
+configureReanimatedLogger({
+    level: ReanimatedLogLevel.warn,
+    strict: false,
+});
 
 export default function App() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const navigationRef = useNavigationContainerRef();
     const [currentRoute, setCurrentRoute] = useState("");
+    const [isNavReady, setIsNavReady] = useState(false);
 
     const navigationTheme = {
         ...DefaultTheme,
@@ -37,16 +47,23 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <Provider store={store}>
-                    <NavigationContainer 
-                        theme={navigationTheme}
-                        ref={navigationRef}
-                        onReady={() => setCurrentRoute(navigationRef.getCurrentRoute()?.name)}
-                        onStateChange={() => setCurrentRoute(navigationRef.getCurrentRoute()?.name)}
-                    >
-                        <StatusBar style={isDark ? "light" : "dark"} />
-                        <AppNavigator />
-                        <MatchmakingOverlay currentRoute={currentRoute} navigationRef={navigationRef} />
-                    </NavigationContainer>
+                    <View style={{ flex: 1 }}>
+                        <NavigationContainer 
+                            theme={navigationTheme}
+                            ref={navigationRef}
+                            onReady={() => {
+                                setCurrentRoute(navigationRef.getCurrentRoute()?.name);
+                                setIsNavReady(true);
+                            }}
+                            onStateChange={() => setCurrentRoute(navigationRef.getCurrentRoute()?.name)}
+                        >
+                            <StatusBar style={isDark ? "light" : "dark"} />
+                            <AppNavigator />
+                        </NavigationContainer>
+                        {isNavReady && (
+                            <MatchmakingOverlay currentRoute={currentRoute} navigationRef={navigationRef} />
+                        )}
+                    </View>
                 </Provider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

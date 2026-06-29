@@ -17,10 +17,8 @@ import chatApi from "../../../api/chatApi";
 import bookingApi from "../../../api/bookingApi";
 import { getSocket } from "../../../utils/socket";
 
-export default function ChatScreen() {
-    const route = useRoute();
-    const navigation = useNavigation();
-    const { matchId, opponentName } = route.params || {};
+export default function ChatScreen({ navigation, route }) {
+    const { matchId, opponentName } = route?.params || {};
     const user = useSelector((state) => state.auth.user);
     const currentUserId = String(user?._id || user?.id);
 
@@ -36,11 +34,13 @@ export default function ChatScreen() {
 
     // ── Load chat history ────────────────────────────────
     useEffect(() => {
+        if (!matchId) return;
         loadHistory();
         loadPendingDeposit();
     }, [matchId]);
 
     const loadHistory = async () => {
+        if (!matchId) { setIsLoading(false); return; }
         try {
             setIsLoading(true);
             const res = await chatApi.getHistory(matchId);
@@ -66,6 +66,7 @@ export default function ChatScreen() {
 
     // ── Load pending deposit from booking API ────────────
     const loadPendingDeposit = async () => {
+        if (!matchId) return;
         try {
             const res = await bookingApi.getMatchPendingDeposit(matchId);
             if (res.data?.pending_deposit) {
@@ -78,6 +79,7 @@ export default function ChatScreen() {
 
     // ── Socket.IO real-time ──────────────────────────────
     useEffect(() => {
+        if (!matchId) return;
         let socket;
 
         const connectSocket = async () => {
@@ -164,6 +166,18 @@ export default function ChatScreen() {
         if (!text || !socketRef.current || isDeleted) return;
 
         setIsSending(true);
+
+        // Optimistic update for sender's UI
+        const tempMsg = {
+            _id: Date.now().toString(),
+            match_id: matchId,
+            sender_id: currentUserId,
+            message: text,
+            createdAt: new Date().toISOString(),
+        };
+        
+        setMessages((prev) => [...prev, tempMsg]);
+
         socketRef.current.emit("send_message", {
             matchId,
             message: text,
@@ -171,7 +185,7 @@ export default function ChatScreen() {
 
         setInputText("");
         setIsSending(false);
-    }, [inputText, matchId, isDeleted]);
+    }, [inputText, matchId, isDeleted, currentUserId]);
 
     // ── Opponent pay 50% ─────────────────────────────────
     const handlePayDeposit = () => {
@@ -254,9 +268,9 @@ export default function ChatScreen() {
         const isBookingMsg = item.message?.includes("đặt cọc 50%") || item.message?.includes("đã đặt sân") || item.message?.includes("thanh toán 50%");
 
         // Get sender name
-        let senderName = "Ẩn danh";
-        if (typeof item.sender_id === "object") {
-            senderName = item.sender_id.name || item.sender_id.userName || "Ẩn danh";
+        let senderName = isMe ? "Bạn" : (opponentName || "Đối thủ");
+        if (!isMe && typeof item.sender_id === "object" && (item.sender_id.name || item.sender_id.userName)) {
+            senderName = item.sender_id.name || item.sender_id.userName;
         }
 
         if (isBookingMsg) {
@@ -465,8 +479,19 @@ export default function ChatScreen() {
                     <TouchableOpacity
                         onPress={handleSend}
                         disabled={!inputText.trim() || isSending}
-                        className={`h-11 w-11 rounded-full items-center justify-center ${inputText.trim() ? "bg-emerald-500 shadow-md shadow-emerald-500/30" : "bg-slate-200 dark:bg-slate-700"
-                            }`}
+                        style={{
+                            height: 44,
+                            width: 44,
+                            borderRadius: 22,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: inputText.trim() ? '#10B981' : '#E2E8F0',
+                            elevation: inputText.trim() ? 4 : 0,
+                            shadowColor: inputText.trim() ? '#10B981' : 'transparent',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 4,
+                        }}
                     >
                         {isSending ? (
                             <ActivityIndicator size="small" color="white" />

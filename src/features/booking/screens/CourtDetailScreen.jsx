@@ -211,6 +211,26 @@ export default function CourtDetailScreen() {
         
         const startTime = selectedSlots[0].start;
         const endTime = selectedSlots[selectedSlots.length - 1].end;
+        
+        // Time validation for today's slots
+        const now = new Date();
+        const selectedD = new Date(selectedDate + 'T00:00:00');
+        
+        // Check if selected date is today
+        if (now.getFullYear() === selectedD.getFullYear() && 
+            now.getMonth() === selectedD.getMonth() && 
+            now.getDate() === selectedD.getDate()) {
+            
+            const [startHour, startMinute] = startTime.split(':').map(Number);
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            
+            if (startHour < currentHour || (startHour === currentHour && startMinute <= currentMinute)) {
+                Alert.alert("Lỗi", "Khung giờ này đã trôi qua. Vui lòng chọn khung giờ khác!");
+                return;
+            }
+        }
+
         const price = (sub.price_per_hour || court.price_per_hour || 0) / 2 * selectedSlotIndices.length;
 
         // ── Bước 1: Lock slots trước khi chuyển sang thanh toán ──
@@ -550,9 +570,23 @@ export default function CourtDetailScreen() {
                                             <Text className="text-xs text-appText/50 italic">Không có lịch</Text>
                                         ) : (
                                             slots.map((slot, sIdx) => {
-                                                const isAvailable = slot.status === "available";
-                                                const isLocked = slot.status === "locked";
-                                                const isBooked = slot.status === "booked";
+                                                const now = new Date();
+                                                const selectedD = new Date(selectedDate + 'T00:00:00');
+                                                const isToday = now.getFullYear() === selectedD.getFullYear() && 
+                                                                now.getMonth() === selectedD.getMonth() && 
+                                                                now.getDate() === selectedD.getDate();
+                                                
+                                                let isPassed = false;
+                                                if (isToday) {
+                                                    const [startH, startM] = slot.start.split(':').map(Number);
+                                                    if (startH < now.getHours() || (startH === now.getHours() && startM <= now.getMinutes())) {
+                                                        isPassed = true;
+                                                    }
+                                                }
+
+                                                const isAvailable = !isPassed && slot.status === "available";
+                                                const isLocked = !isPassed && slot.status === "locked";
+                                                const isBooked = !isPassed && slot.status === "booked";
                                                 const isSelected = selectedSubCourt === sub._id && selectedSlotIndices.includes(sIdx);
                                                 
                                                 let bgColor = "bg-red-100 dark:bg-red-900/30";
@@ -560,7 +594,12 @@ export default function CourtDetailScreen() {
                                                 let subTextColor = "text-red-400 dark:text-red-500";
                                                 let label = "Đã đặt";
                                                 
-                                                if (isLocked) {
+                                                if (isPassed) {
+                                                    bgColor = "bg-slate-200 dark:bg-slate-800";
+                                                    textColor = "text-slate-400 dark:text-slate-600";
+                                                    subTextColor = "text-slate-400 dark:text-slate-600";
+                                                    label = "Đã qua";
+                                                } else if (isLocked) {
                                                     bgColor = "bg-amber-100 dark:bg-amber-900/30";
                                                     textColor = "text-amber-600 dark:text-amber-400";
                                                     subTextColor = "text-amber-500 dark:text-amber-500";
@@ -575,7 +614,7 @@ export default function CourtDetailScreen() {
                                                 return (
                                                     <TouchableOpacity 
                                                         key={sIdx}
-                                                        onPress={() => handleSlotClick(sub._id, sIdx, slot)}
+                                                        onPress={() => isPassed ? null : handleSlotClick(sub._id, sIdx, slot)}
                                                         activeOpacity={isAvailable ? 0.7 : 1}
                                                         className={`items-center justify-center rounded-lg px-3 py-1.5 min-w-[64px] ${bgColor}`}
                                                     >
@@ -620,14 +659,14 @@ export default function CourtDetailScreen() {
                                     <View className="flex-row items-center justify-between mb-2">
                                         <View className="flex-row items-center gap-2">
                                             <View className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 items-center justify-center">
-                                                {r.user_id?.avatar ? (
-                                                    <Image source={{ uri: r.user_id.avatar }} className="h-full w-full rounded-full" />
+                                                {r.user_avatar ? (
+                                                    <Image source={{ uri: r.user_avatar }} className="h-full w-full rounded-full" />
                                                 ) : (
-                                                    <Text className="text-xs font-bold text-slate-500 dark:text-slate-400">{r.user_id?.name?.[0] || 'U'}</Text>
+                                                    <Text className="text-xs font-bold text-slate-500 dark:text-slate-400">{(r.user_name?.[0] || 'U').toUpperCase()}</Text>
                                                 )}
                                             </View>
                                             <View>
-                                                <Text className="text-sm font-bold text-appText">{r.user_id?.name || 'Người dùng ẩn danh'}</Text>
+                                                <Text className="text-sm font-bold text-appText">{r.user_name || 'Người dùng ẩn danh'}</Text>
                                                 <Text className="text-[10px] text-appText/40">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</Text>
                                             </View>
                                         </View>

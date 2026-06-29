@@ -11,6 +11,11 @@ export default function MatchmakingOverlay({ currentRoute, navigationRef }) {
     
     const isMatchmakingScreen = currentRoute === "Ghép Kèo";
 
+    // Fetch initial status on mount
+    useEffect(() => {
+        checkStatus();
+    }, []);
+
     // Polling logic
     useEffect(() => {
         let interval;
@@ -39,7 +44,7 @@ export default function MatchmakingOverlay({ currentRoute, navigationRef }) {
                 dispatch(setStatus("IDLE"));
             }
         } catch (err) {
-            console.log("Overlay check status error:", err);
+            // console.log("Overlay check status error:", err);
         }
     };
 
@@ -69,7 +74,7 @@ export default function MatchmakingOverlay({ currentRoute, navigationRef }) {
 
     return (
         <TouchableOpacity 
-            onPress={() => navigationRef?.navigate("Ghép Kèo")}
+            onPress={() => navigationRef?.navigate("BottomTabs", { screen: "Ghép Kèo" })}
             className="absolute top-14 self-center bg-white dark:bg-appSurface px-4 py-2 rounded-full shadow-lg shadow-black/20 flex-row items-center gap-3 border border-emerald-500"
             style={{ elevation: 10, zIndex: 1000 }}
         >

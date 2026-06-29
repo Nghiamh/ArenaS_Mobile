@@ -1,5 +1,6 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 
@@ -17,14 +18,15 @@ import UserSkillScreen from "../features/discovery/screens/UserSkillScreen";
 import ChatScreen from "../features/discovery/screens/ChatScreen";
 
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 
-export default function MainTab() {
-
+function BottomTabs() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
 
     return (
         <Tab.Navigator
+            detachInactiveScreens={false}
             screenOptions={({ route }) => ({
                 headerShown: false,
                 headerStyle: { backgroundColor: isDark ? "#08101F" : "#F5F7FA" },
@@ -37,7 +39,6 @@ export default function MainTab() {
                 tabBarInactiveTintColor: isDark ? "#94A3B8" : "#64748B",
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName;
-
                     if (route.name === "Trang chủ") {
                         iconName = focused ? "home" : "home-outline";
                     } else if (route.name === "Tìm Sân") {
@@ -49,75 +50,35 @@ export default function MainTab() {
                     } else if (route.name === "Hồ sơ") {
                         iconName = focused ? "person" : "person-outline";
                     }
-
                     return <Ionicons name={iconName} size={size} color={color} />;
                 },
             })}
         >
-            <Tab.Screen name="Trang chủ" component={HomeScreen} options={{ tabBarLabel: "Trang chủ" }} />
-            <Tab.Screen name="Tìm Sân" component={SearchResultScreen} options={{ tabBarLabel: "Tìm Sân" }} />
-            <Tab.Screen name="Bản đồ" component={MapScreen} options={{ tabBarLabel: "Bản đồ" }} />
-            <Tab.Screen name="Ghép Kèo" component={MatchmakingScreen} options={{ tabBarLabel: "Ghép Kèo" }} />
-            <Tab.Screen name="Hồ sơ" component={ProfileScreen} options={{ tabBarLabel: "Hồ sơ" }} />
-            
-            {/* Hidden Screens */}
-            <Tab.Screen 
-                name="Đặt lịch" 
-                component={CourtDetailScreen} 
-                options={{ 
-                    tabBarButton: () => null, 
-                    tabBarItemStyle: { display: 'none' } 
-                }} 
-            />
-            <Tab.Screen 
-                name="Thanh toán" 
-                component={PaymentScreen} 
-                options={{ 
-                    tabBarButton: () => null, 
-                    tabBarItemStyle: { display: 'none' } 
-                }} 
-            />
-            <Tab.Screen 
-                name="Chỉnh sửa hồ sơ" 
-                component={EditProfileScreen} 
-                options={{ 
-                    tabBarButton: () => null, 
-                    tabBarItemStyle: { display: 'none' } 
-                }} 
-            />
-            <Tab.Screen 
-                name="Ví tiền" 
-                component={WalletScreen} 
-                options={{ 
-                    tabBarButton: () => null, 
-                    tabBarItemStyle: { display: 'none' } 
-                }} 
-            />
-            <Tab.Screen 
-                name="Thông báo" 
-                component={NotificationScreen} 
-                options={{ 
-                    tabBarButton: () => null, 
-                    tabBarItemStyle: { display: 'none' } 
-                }} 
-            />
-            <Tab.Screen 
-                name="Kỹ năng" 
-                component={UserSkillScreen} 
-                options={{ 
-                    tabBarButton: () => null, 
-                    tabBarItemStyle: { display: 'none' } 
-                }} 
-            />
-            <Tab.Screen 
-                name="Chat" 
-                component={ChatScreen} 
-                options={{ 
-                    tabBarButton: () => null, 
-                    tabBarItemStyle: { display: 'none' } 
-                }} 
-            />
-
+            <Tab.Screen name="Trang chủ" component={HomeScreen} />
+            <Tab.Screen name="Tìm Sân" component={SearchResultScreen} />
+            <Tab.Screen name="Bản đồ" component={MapScreen} />
+            <Tab.Screen name="Ghép Kèo" component={MatchmakingScreen} />
+            <Tab.Screen name="Hồ sơ" component={ProfileScreen} />
         </Tab.Navigator>
+    );
+}
+
+export default function MainTab() {
+    return (
+        <Stack.Navigator 
+            screenOptions={{ headerShown: false }}
+            detachInactiveScreens={false}
+        >
+            <Stack.Screen name="BottomTabs" component={BottomTabs} />
+            
+            {/* These screens were previously hidden tabs, which caused context loss on re-render */}
+            <Stack.Screen name="Đặt lịch" component={CourtDetailScreen} />
+            <Stack.Screen name="Thanh toán" component={PaymentScreen} />
+            <Stack.Screen name="Chỉnh sửa hồ sơ" component={EditProfileScreen} />
+            <Stack.Screen name="Ví tiền" component={WalletScreen} />
+            <Stack.Screen name="Thông báo" component={NotificationScreen} />
+            <Stack.Screen name="Kỹ năng" component={UserSkillScreen} />
+            <Stack.Screen name="Chat" component={ChatScreen} />
+        </Stack.Navigator>
     );
 }

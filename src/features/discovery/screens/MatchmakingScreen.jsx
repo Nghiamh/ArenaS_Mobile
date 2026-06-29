@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, ScrollView, Text, TouchableOpacity, Alert, ActivityIndicator, Animated, Easing, Image } from "react-native";
+import { View, ScrollView, Text, TouchableOpacity, Alert, ActivityIndicator, Animated, Easing, Image, Modal, TextInput } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
@@ -19,6 +19,13 @@ export default function MatchmakingScreen() {
     const [selectedCourt, setSelectedCourt] = useState(null);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showReportModal, setShowReportModal] = useState(false);
+    
+    // Feedback Modal State
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [completedMatchId, setCompletedMatchId] = useState(null);
+    const [feedbackForm, setFeedbackForm] = useState({ rating: 5, comment: "" });
+    const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+    
     const pollRef = useRef(null);  // useRef để tránh race condition với polling
 
     useEffect(() => {
@@ -253,6 +260,58 @@ export default function MatchmakingScreen() {
         );
     };
 
+    const handleCompleteMatch = () => {
+        Alert.alert(
+            "Hoàn thành trận đấu",
+            "Xác nhận hoàn thành trận đấu này? Bạn sẽ được đánh giá đối thủ sau khi xác nhận.",
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Xác nhận",
+                    onPress: async () => {
+                        if (!matchData) return;
+                        try {
+                            setIsLoading(true);
+                            await matchmakingApi.completeMatch(matchData._id || matchData.id);
+                            
+                            // Show feedback modal instead of going to IDLE immediately
+                            setCompletedMatchId(matchData._id || matchData.id);
+                            setShowFeedbackModal(true);
+                            
+                        } catch (err) {
+                            Alert.alert("Lỗi", err.response?.data?.error || "Không thể hoàn thành trận đấu.");
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleSubmitFeedback = async () => {
+        if (!completedMatchId) return;
+        try {
+            setIsSubmittingFeedback(true);
+            await matchmakingApi.submitFeedback(completedMatchId, feedbackForm);
+            Alert.alert("Thành công", "Đánh giá đã được ghi nhận. Điểm ELO của bạn đã được cập nhật!");
+        } catch (err) {
+            console.log("Feedback error:", err);
+            Alert.alert("Lỗi", "Không thể gửi đánh giá.");
+        } finally {
+            setIsSubmittingFeedback(false);
+            setShowFeedbackModal(false);
+            dispatch(setStatus("IDLE"));
+            dispatch(setMatchData(null));
+        }
+    };
+
+    const handleSkipFeedback = () => {
+        setShowFeedbackModal(false);
+        dispatch(setStatus("IDLE"));
+        dispatch(setMatchData(null));
+    };
+
     const renderMatchCard = (isConfirmed) => {
         const currentUserId = String(user?._id || user?.id);
         const opponent = matchData?.participants?.find(p => String(p?._id || p?.id) !== currentUserId) || {};
@@ -325,9 +384,19 @@ export default function MatchmakingScreen() {
                                 <Ionicons name="warning" size={16} color="#d97706" />
                                 <Text className="text-yellow-700 dark:text-yellow-500 font-bold">Tố cáo</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={handleDecline} className="flex-1 py-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/50 items-center justify-center flex-row gap-2">
-                                <Ionicons name="close" size={16} color="#ef4444" />
-                                <Text className="text-red-500 font-bold">Từ Chối</Text>
+                            <TouchableOpacity 
+                                onPress={handleCompleteMatch} 
+                                disabled={isLoading}
+                                className="flex-1 py-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50 items-center justify-center flex-row gap-2"
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator size="small" color="#059669" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                                        <Text className="text-emerald-600 font-bold">Hoàn Thành</Text>
+                                    </>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -421,6 +490,62 @@ export default function MatchmakingScreen() {
                     )?.name || "Đối thủ"
                 }
             />
+
+            {/* Feedback Modal */}
+            <Modal visible={showFeedbackModal} transparent animationType="slide" onRequestClose={handleSkipFeedback}>
+                <View className="flex-1 justify-end bg-black/50">
+                    <View className="bg-white dark:bg-appBg rounded-t-3xl p-6">
+                        <View className="flex-row items-center justify-between mb-6">
+                            <Text className="text-xl font-bold text-appText">Đánh giá đối thủ</Text>
+                            <TouchableOpacity onPress={handleSkipFeedback} className="h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-appSurface">
+                                <Ionicons name="close" size={20} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text className="text-sm font-medium text-appText/70 text-center mb-3">
+                            Đối thủ của bạn chơi thế nào? (Thắng/Thua, Thái độ, Kỹ năng)
+                        </Text>
+                        
+                        {/* Stars */}
+                        <View className="flex-row justify-center gap-2 mb-6">
+                            {[1, 2, 3, 4, 5].map(star => (
+                                <TouchableOpacity key={star} onPress={() => setFeedbackForm(p => ({ ...p, rating: star }))}>
+                                    <Ionicons 
+                                        name={star <= feedbackForm.rating ? "star" : "star-outline"} 
+                                        size={40} 
+                                        color={star <= feedbackForm.rating ? "#F59E0B" : "#CBD5E1"} 
+                                    />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text className="text-sm font-semibold text-appText mb-2">Nhận xét thêm (tùy chọn)</Text>
+                        <TextInput
+                            value={feedbackForm.comment}
+                            onChangeText={text => setFeedbackForm(p => ({ ...p, comment: text }))}
+                            placeholder="Tuyệt vời, chơi rất fair-play..."
+                            placeholderTextColor="#94A3B8"
+                            multiline
+                            numberOfLines={3}
+                            textAlignVertical="top"
+                            className="bg-slate-50 dark:bg-appSurface border border-appText/10 rounded-xl p-4 text-appText min-h-[80px] mb-6"
+                        />
+
+                        <TouchableOpacity 
+                            onPress={handleSubmitFeedback}
+                            disabled={isSubmittingFeedback}
+                            className={`rounded-xl py-4 items-center flex-row justify-center ${isSubmittingFeedback ? 'bg-emerald-600/70' : 'bg-emerald-600'}`}
+                        >
+                            {isSubmittingFeedback ? <ActivityIndicator size="small" color="white" className="mr-2" /> : null}
+                            <Text className="text-base font-bold text-white">GỬI ĐÁNH GIÁ & NHẬN ĐIỂM</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity onPress={handleSkipFeedback} className="mt-4 py-2">
+                            <Text className="text-center text-sm font-semibold text-appText/50">Bỏ qua</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 }
