@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { SafeAreaView, View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -39,25 +39,27 @@ export default function SearchResultScreen() {
     }, [dispatch, courts.length]);
 
     // Lọc theo sport hoặc searchText (ưu tiên search local)
-    const filteredCourts = courts.filter((c) => {
-        let matchesSport = true;
-        let matchesQuery = true;
+    const filteredCourts = useMemo(() => {
+        return courts.filter((c) => {
+            let matchesSport = true;
+            let matchesQuery = true;
 
-        if (sportName) {
-            const sports = c.sports || [];
-            matchesSport = sports.some((s) => s.toLowerCase().includes(sportName.toLowerCase()));
-        }
+            if (sportName) {
+                const sports = c.sports || [];
+                matchesSport = sports.some((s) => s.toLowerCase().includes(sportName.toLowerCase()));
+            }
 
-        const q = (activeSearch || "").toLowerCase();
-        if (q) {
-            const nameMatch = (c.name || "").toLowerCase().includes(q);
-            const addressMatch = (c.location || c.address || "").toLowerCase().includes(q);
-            const sportMatch = (c.sports || []).some(s => s.toLowerCase().includes(q));
-            matchesQuery = nameMatch || addressMatch || sportMatch;
-        }
+            const q = (activeSearch || "").toLowerCase();
+            if (q) {
+                const nameMatch = (c.name || "").toLowerCase().includes(q);
+                const addressMatch = (c.location || c.address || "").toLowerCase().includes(q);
+                const sportMatch = (c.sports || []).some(s => s.toLowerCase().includes(q));
+                matchesQuery = nameMatch || addressMatch || sportMatch;
+            }
 
-        return matchesSport && matchesQuery;
-    });
+            return matchesSport && matchesQuery;
+        });
+    }, [courts, sportName, activeSearch]);
 
     return (
         <SafeAreaView className="flex-1 bg-appBg">

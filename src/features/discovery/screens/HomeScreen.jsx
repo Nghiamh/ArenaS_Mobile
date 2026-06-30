@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Image, ActivityIndicator } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -40,10 +40,10 @@ export default function HomeScreen() {
     }, [dispatch, isLoggedIn]);
 
     // Nhóm theo môn thể thao
-    const sportGroups = groupBySport(courts);
+    const sportGroups = useMemo(() => groupBySport(courts), [courts]);
 
     // Áp dụng filter cho danh sách "Sân gần bạn"
-    const getFilteredVenues = () => {
+    const nearbyVenues = useMemo(() => {
         let filtered = [...courts];
         switch (activeFilter) {
             case "Nổi bật":
@@ -59,8 +59,7 @@ export default function HomeScreen() {
                 break;
         }
         return filtered.slice(0, 6);
-    };
-    const nearbyVenues = getFilteredVenues();
+    }, [courts, activeFilter]);
 
     return (
         <SafeAreaView className="flex-1 bg-appBg">

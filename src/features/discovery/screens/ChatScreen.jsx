@@ -249,7 +249,7 @@ export default function ChatScreen({ navigation, route }) {
     };
 
     // ── Render a single message ──────────────────────────
-    const renderMessage = ({ item }) => {
+    const renderMessage = useCallback(({ item }) => {
         const senderId = typeof item.sender_id === "object"
             ? String(item.sender_id._id || item.sender_id.id)
             : String(item.sender_id);
@@ -319,7 +319,7 @@ export default function ChatScreen({ navigation, route }) {
                 </Text>
             </View>
         );
-    };
+    }, [currentUserId, opponentName]);
 
     // ── Pending deposit banner ────────────────────────────
     const renderDepositBanner = () => {
@@ -420,6 +420,10 @@ export default function ChatScreen({ navigation, route }) {
                     data={messages}
                     keyExtractor={(item) => String(item._id)}
                     renderItem={renderMessage}
+                    initialNumToRender={15}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                    removeClippedSubviews={true}
                     contentContainerStyle={{ paddingVertical: 16, flexGrow: 1 }}
                     onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
                     ListEmptyComponent={

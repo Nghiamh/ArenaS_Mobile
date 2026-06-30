@@ -33,16 +33,16 @@ export default function NotificationScreen() {
         }
     };
 
-    const handleRead = async (id) => {
+    const handleRead = React.useCallback(async (id) => {
         try {
             await notificationApi.markNotificationRead(id);
-            setNotifications(notifications.map(n => n._id === id ? { ...n, isRead: true } : n));
+            setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
         } catch (error) {
             console.log("Error marking read:", error);
         }
-    };
+    }, []);
 
-    const renderItem = ({ item }) => (
+    const renderItem = React.useCallback(({ item }) => (
         <TouchableOpacity 
             onPress={() => handleRead(item._id)}
             className={`p-4 border-b border-appText/5 flex-row gap-3 ${item.isRead ? 'bg-appBg' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}
@@ -56,7 +56,7 @@ export default function NotificationScreen() {
                 <Text className="text-xs text-appText/40 mt-2">{new Date(item.createdAt).toLocaleString("vi-VN")}</Text>
             </View>
         </TouchableOpacity>
-    );
+    ), [handleRead]);
 
     return (
         <View className="flex-1 bg-appBg">
@@ -84,6 +84,10 @@ export default function NotificationScreen() {
                     data={notifications}
                     keyExtractor={(item) => item._id?.toString() || Math.random().toString()}
                     renderItem={renderItem}
+                    initialNumToRender={15}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                    removeClippedSubviews={true}
                 />
             )}
         </View>

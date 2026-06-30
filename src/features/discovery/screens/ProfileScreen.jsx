@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Modal } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -57,39 +57,42 @@ export default function ProfileScreen() {
     const todayStr = `${year}-${month}-${day}`;
 
     const tenDaysAgoObj = new Date();
-    tenDaysAgoObj.setDate(todayObj.getDate() - 10);
+    tenDaysAgoObj.setDate(new Date().getDate() - 10);
     const tenYear = tenDaysAgoObj.getFullYear();
     const tenMonth = String(tenDaysAgoObj.getMonth() + 1).padStart(2, '0');
     const tenDay = String(tenDaysAgoObj.getDate()).padStart(2, '0');
     const tenDaysAgoStr = `${tenYear}-${tenMonth}-${tenDay}`;
 
-    const processedBookings = bookings
-        .filter(b => b.date >= tenDaysAgoStr)
-        .map(b => {
-            let status = b.status;
-            // Override waiting_opponent to confirmed if the user paid 100%
-            if (status === "waiting_opponent" && b.participants) {
-                const totalPaid = b.participants.reduce((sum, p) => p.status === 'paid' ? sum + p.amount : sum, 0);
-                if (totalPaid >= b.total_price) {
-                    status = "confirmed";
-                }
-            }
-            if (status === "confirmed" || status === "pending") {
-                if (b.date < todayStr) {
-                    status = "completed";
-                } else if (b.date === todayStr) {
-                    const currentHour = todayObj.getHours();
-                    const currentMinute = todayObj.getMinutes();
-                    const endTimeStr = b.end_time || b.endTime || "23:59";
-                    const [endHour, endMinute] = endTimeStr.split(':').map(Number);
-                    
-                    if (currentHour > endHour || (currentHour === endHour && currentMinute >= endMinute)) {
-                        status = "completed";
+    const processedBookings = useMemo(() => {
+        return bookings
+            .filter(b => b.date >= tenDaysAgoStr)
+            .map(b => {
+                let status = b.status;
+                // Override waiting_opponent to confirmed if the user paid 100%
+                if (status === "waiting_opponent" && b.participants) {
+                    const totalPaid = b.participants.reduce((sum, p) => p.status === 'paid' ? sum + p.amount : sum, 0);
+                    if (totalPaid >= b.total_price) {
+                        status = "confirmed";
                     }
                 }
-            }
-            return { ...b, displayStatus: status };
-        });
+                if (status === "confirmed" || status === "pending") {
+                    if (b.date < todayStr) {
+                        status = "completed";
+                    } else if (b.date === todayStr) {
+                        const now = new Date();
+                        const currentHour = now.getHours();
+                        const currentMinute = now.getMinutes();
+                        const endTimeStr = b.end_time || b.endTime || "23:59";
+                        const [endHour, endMinute] = endTimeStr.split(':').map(Number);
+                        
+                        if (currentHour > endHour || (currentHour === endHour && currentMinute >= endMinute)) {
+                            status = "completed";
+                        }
+                    }
+                }
+                return { ...b, displayStatus: status };
+            });
+    }, [bookings, tenDaysAgoStr, todayStr]);
 
     const statusWeight = {
         confirmed: 1,
@@ -99,28 +102,30 @@ export default function ProfileScreen() {
         cancelled: 4
     };
 
-    const sortedBookings = (bookingFilter === "all"
-        ? processedBookings
-        : processedBookings.filter(b => (b.displayStatus === "confirmed" || b.displayStatus === "pending") && b.date >= todayStr)
-    ).sort((a, b) => {
-        const wA = statusWeight[a.displayStatus] || 99;
-        const wB = statusWeight[b.displayStatus] || 99;
-        
-        if (wA !== wB) return wA - wB;
-        
-        if (a.date !== b.date) {
-            // Completed/Cancelled: newest first (descending)
-            // Upcoming: nearest first (ascending)
-            if (wA >= 3) return b.date.localeCompare(a.date);
-            return a.date.localeCompare(b.date);
-        }
+    const sortedBookings = useMemo(() => {
+        return (bookingFilter === "all"
+            ? processedBookings
+            : processedBookings.filter(b => (b.displayStatus === "confirmed" || b.displayStatus === "pending") && b.date >= todayStr)
+        ).sort((a, b) => {
+            const wA = statusWeight[a.displayStatus] || 99;
+            const wB = statusWeight[b.displayStatus] || 99;
+            
+            if (wA !== wB) return wA - wB;
+            
+            if (a.date !== b.date) {
+                // Completed/Cancelled: newest first (descending)
+                // Upcoming: nearest first (ascending)
+                if (wA >= 3) return b.date.localeCompare(a.date);
+                return a.date.localeCompare(b.date);
+            }
 
-        const tA = a.start_time || a.startTime || "00:00";
-        const tB = b.start_time || b.startTime || "00:00";
-        
-        if (wA >= 3) return tB.localeCompare(tA);
-        return tA.localeCompare(tB);
-    });
+            const tA = a.start_time || a.startTime || "00:00";
+            const tB = b.start_time || b.startTime || "00:00";
+            
+            if (wA >= 3) return tB.localeCompare(tA);
+            return tA.localeCompare(tB);
+        });
+    }, [bookingFilter, processedBookings, todayStr]);
 
 
     const handleCancelBooking = (booking) => {
