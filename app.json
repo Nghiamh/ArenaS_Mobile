@@ -22,7 +22,7 @@
       "package": "com.arenas.mobile",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/Img/logo.JPG.jpg",
+        "foregroundImage": "./assets/Img/logo.png",
         "backgroundColor": "#007F3F"
       }
     },
