@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { View, ScrollView, Text, TouchableOpacity, Alert, ActivityIndicator, Animated, Easing, Image, Modal, TextInput } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
 import matchmakingApi from "../../../api/matchmakingApi";
+import bookingApi from "../../../api/bookingApi";
 import { setStatus, setMatchData } from "../../../store/slices/matchmakingSlice";
 import MiniMap from "../../../components/MiniMap";
 import ReportModal from "./ReportModal";
@@ -26,6 +27,14 @@ export default function MatchmakingScreen() {
     const [feedbackForm, setFeedbackForm] = useState({ rating: 5, comment: "" });
     const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
     
+    // Deposit States
+    const [opponentDeposit, setOpponentDeposit] = useState(null);
+    const [depositCountdown, setDepositCountdown] = useState(0);
+    const [isPayingDeposit, setIsPayingDeposit] = useState(false);
+    
+    // Timer States
+    const [nowTick, setNowTick] = useState(Date.now());
+
     const pollRef = useRef(null);  // useRef để tránh race condition với polling
 
     useEffect(() => {
@@ -76,16 +85,31 @@ export default function MatchmakingScreen() {
         return () => clearInterval(interval);
     }, [status]);
 
-    // Polling trạng thái khi đang WAITING hoặc MATCHED
+    // Polling trạng thái khi đang WAITING hoặc MATCHED hoặc CONFIRMED
     useEffect(() => {
-        if (status === "WAITING" || status === "MATCHED") {
+        if (status === "WAITING" || status === "MATCHED" || status === "CONFIRMED") {
             pollRef.current = setInterval(async () => {
                 try {
                     const res = await matchmakingApi.getStatus();
-                    if (res.data?.status === "MATCHED") {
+                    if (res.data?.status === "MATCHED" || res.data?.status === "CONFIRMED") {
                         const match = res.data?.ticket?.match_id;
                         if (match?.status === "CONFIRMED") {
                             dispatch(setStatus("CONFIRMED"));
+                            // Fetch pending deposit if confirmed
+                            try {
+                                const depRes = await bookingApi.getMatchPendingDeposit(match._id || match.id);
+                                if (depRes.data?.pending_deposit) {
+                                    setOpponentDeposit(depRes.data.pending_deposit);
+                                    if (depRes.data.pending_deposit.deadline) {
+                                        const remainingSec = Math.max(0, Math.floor((new Date(depRes.data.pending_deposit.deadline).getTime() - Date.now()) / 1000));
+                                        setDepositCountdown(remainingSec);
+                                    }
+                                } else {
+                                    setOpponentDeposit(null);
+                                }
+                            } catch (e) {
+                                // Ignore deposit fetch error
+                            }
                         } else {
                             dispatch(setStatus("MATCHED"));
                         }
@@ -112,10 +136,21 @@ export default function MatchmakingScreen() {
                 const res = await matchmakingApi.getStatus();
                 if (res.data?.status === "WAITING") {
                     dispatch(setStatus("WAITING"));
-                } else if (res.data?.status === "MATCHED") {
+                } else if (res.data?.status === "MATCHED" || res.data?.status === "CONFIRMED") {
                     const match = res.data?.ticket?.match_id;
                     if (match?.status === "CONFIRMED") {
                         dispatch(setStatus("CONFIRMED"));
+                        // Fetch pending deposit if confirmed
+                        try {
+                            const depRes = await bookingApi.getMatchPendingDeposit(match._id || match.id);
+                            if (depRes.data?.pending_deposit) {
+                                setOpponentDeposit(depRes.data.pending_deposit);
+                                if (depRes.data.pending_deposit.deadline) {
+                                    const remainingSec = Math.max(0, Math.floor((new Date(depRes.data.pending_deposit.deadline).getTime() - Date.now()) / 1000));
+                                    setDepositCountdown(remainingSec);
+                                }
+                            }
+                        } catch (e) {}
                     } else {
                         dispatch(setStatus("MATCHED"));
                     }
@@ -127,6 +162,61 @@ export default function MatchmakingScreen() {
         };
         fetchCurrentStatus();
     }, [dispatch]);
+
+    // Timer for Match Completion
+    useEffect(() => {
+        if (status !== "CONFIRMED" || !matchData?.scheduled_end_at) return;
+        const timer = setInterval(() => setNowTick(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [status, matchData?.scheduled_end_at]);
+
+    const completeUnlockInfo = useMemo(() => {
+        if (!matchData || !matchData.scheduled_end_at) return { canComplete: false, remainingMin: 0, remainingSec: 0 };
+        const endTime = new Date(matchData.scheduled_end_at).getTime();
+        const unlockTime = endTime - 15 * 60 * 1000;
+        const diff = unlockTime - nowTick;
+        return {
+            canComplete: diff <= 0,
+            remainingMin: Math.max(0, Math.floor(diff / 60000)),
+            remainingSec: Math.max(0, Math.floor((diff % 60000) / 1000)),
+        };
+    }, [matchData, nowTick]);
+
+    // Countdown for Deposit
+    useEffect(() => {
+        if (!opponentDeposit || depositCountdown <= 0) return;
+        const timer = setInterval(() => {
+            setDepositCountdown(prev => {
+                if (prev <= 1) {
+                    setOpponentDeposit(null);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [opponentDeposit, depositCountdown]);
+
+    const handlePayDeposit = async () => {
+        if (!opponentDeposit?.bookingId) return;
+        try {
+            setIsPayingDeposit(true);
+            await bookingApi.opponentPayBooking(opponentDeposit.bookingId);
+            setOpponentDeposit(null);
+            Alert.alert("Thành công", "Thanh toán thành công! Sân đã được đặt.");
+            const res = await matchmakingApi.getStatus();
+            if (res.data?.ticket?.match_id) dispatch(setMatchData(res.data.ticket.match_id));
+        } catch (err) {
+            const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+            if (msg.toLowerCase().includes("số dư") || msg.toLowerCase().includes("insufficient")) {
+                Alert.alert("Lỗi", "Số dư ví không đủ. Vui lòng nạp thêm tiền!");
+            } else {
+                Alert.alert("Lỗi", "Thanh toán thất bại: " + msg);
+            }
+        } finally {
+            setIsPayingDeposit(false);
+        }
+    };
 
     const handleJoinQueue = async () => {
         try {
@@ -348,19 +438,92 @@ export default function MatchmakingScreen() {
                 </View>
 
                 {/* Court Card */}
-                <View className="w-full bg-white dark:bg-appSurface border border-appText/10 rounded-xl p-4 mb-8 flex-row items-center gap-4 shadow-sm shadow-black/5">
-                    <View className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center">
+                <View className="w-full bg-white dark:bg-appSurface border border-appText/10 rounded-xl p-4 mb-8 flex-row items-start gap-4 shadow-sm shadow-black/5">
+                    <View className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mt-1">
                         <Ionicons name="location-outline" size={20} color="#3b82f6" />
                     </View>
                     <View className="flex-1">
                         <Text className="text-base font-bold text-appText">{court.name || "Sân Bóng Chảo Lửa"}</Text>
                         <Text className="text-xs text-appText/50 mt-1" numberOfLines={2}>{court.location || "30 Phan Thúc Duyện, Phường 4, Tân Bình, HCM"}</Text>
+                        
+                        {/* Booked Time */}
+                        {matchData?.scheduled_at && (
+                            <View className="flex-row items-center mt-2 bg-blue-50 dark:bg-blue-900/20 self-start px-2 py-1 rounded-md">
+                                <Ionicons name="alarm-outline" size={14} color="#3b82f6" />
+                                <Text className="text-xs font-bold text-blue-600 dark:text-blue-400 ml-1">
+                                    Giờ chơi: {new Date(matchData.scheduled_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})} ngày {new Date(matchData.scheduled_at).toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit', year:'numeric'})}
+                                </Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
                 {/* Actions */}
                 {isConfirmed ? (
-                    <View className="w-full mt-auto">
+                    <View className="w-full mt-auto gap-3">
+                        {/* Deposit prompt */}
+                        {opponentDeposit && (
+                            <View className="w-full mb-1 bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-800 rounded-xl p-4">
+                                <View className="flex-row items-center gap-2 mb-2">
+                                    <Ionicons name="warning" size={20} color="#ea580c" />
+                                    <Text className="font-bold text-orange-600 dark:text-orange-400">Yêu Cầu Thanh Toán Sân</Text>
+                                </View>
+                                <Text className="text-sm text-orange-700 dark:text-orange-300 mb-3">
+                                    Đối thủ đã đặt cọc 50%. Bạn cần thanh toán {new Intl.NumberFormat('vi-VN').format(opponentDeposit.amount)}đ phần còn lại.
+                                </Text>
+                                <View className="flex-row items-center justify-between mb-4 bg-orange-100/50 dark:bg-orange-950/50 p-2 rounded-lg">
+                                    <Text className="text-xs text-orange-600 font-medium">Hạn chót thanh toán:</Text>
+                                    <Text className="font-bold text-orange-600">
+                                        {Math.floor(depositCountdown / 60).toString().padStart(2, '0')}:{(depositCountdown % 60).toString().padStart(2, '0')}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity 
+                                    onPress={handlePayDeposit}
+                                    disabled={isPayingDeposit}
+                                    className="w-full py-3 rounded-xl bg-orange-500 items-center justify-center shadow-sm"
+                                >
+                                    {isPayingDeposit ? (
+                                        <ActivityIndicator color="white" />
+                                    ) : (
+                                        <Text className="text-white font-bold">Thanh Toán Ngay</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        
+                        {/* Hoàn Thành */}
+                        {matchData?.scheduled_at ? (
+                            <TouchableOpacity 
+                                onPress={handleCompleteMatch} 
+                                disabled={isLoading || !completeUnlockInfo.canComplete}
+                                className={`w-full py-4 rounded-xl items-center justify-center flex-row gap-2 ${
+                                    (!completeUnlockInfo.canComplete) 
+                                    ? 'bg-emerald-900/40 border border-emerald-800' 
+                                    : 'bg-emerald-600 border border-emerald-500'
+                                }`}
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator size="small" color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
+                                ) : (
+                                    <>
+                                        <Ionicons name="hardware-chip-outline" size={18} color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
+                                        <Text className={`font-bold text-center px-1 ${!completeUnlockInfo.canComplete ? 'text-slate-400' : 'text-white'}`}>
+                                            {completeUnlockInfo.canComplete 
+                                                ? 'Hoàn Thành Trận Đấu' 
+                                                : `Còn ${String(completeUnlockInfo.remainingMin).padStart(2, '0')}:${String(completeUnlockInfo.remainingSec).padStart(2, '0')} để hoàn thành`}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        ) : (
+                            <View className="w-full py-4 rounded-xl bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 items-center justify-center flex-col px-2">
+                                <Text className="text-slate-500 font-bold text-center text-[11px] leading-tight" numberOfLines={2}>
+                                    Đợi hoàn tất thanh toán sân...
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* Vào Chat */}
                         <TouchableOpacity 
                             onPress={() => {
                                 const currentUserId = String(user?._id || user?.id);
@@ -370,35 +533,20 @@ export default function MatchmakingScreen() {
                                     opponentName: opp.name || opp.userName || 'Đối thủ',
                                 });
                             }}
-                            className="w-full py-4 rounded-xl bg-blue-500 items-center justify-center flex-row gap-2 mb-4 shadow-md shadow-blue-500/30"
+                            className="w-full py-4 rounded-xl bg-[#0EA5E9] items-center justify-center flex-row gap-2 shadow-md shadow-sky-500/30"
                         >
                             <Ionicons name="chatbubble-ellipses-outline" size={20} color="white" />
-                            <Text className="text-white font-bold text-lg">Vào Chat</Text>
+                            <Text className="text-white font-bold text-base">Vào Chat</Text>
                         </TouchableOpacity>
-                        
-                        <View className="flex-row gap-4 w-full">
-                            <TouchableOpacity 
-                                onPress={() => setShowReportModal(true)}
-                                className="flex-1 py-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 items-center justify-center flex-row gap-2"
-                            >
-                                <Ionicons name="warning" size={16} color="#d97706" />
-                                <Text className="text-yellow-700 dark:text-yellow-500 font-bold">Tố cáo</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={handleCompleteMatch} 
-                                disabled={isLoading}
-                                className="flex-1 py-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50 items-center justify-center flex-row gap-2"
-                            >
-                                {isLoading ? (
-                                    <ActivityIndicator size="small" color="#059669" />
-                                ) : (
-                                    <>
-                                        <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                                        <Text className="text-emerald-600 font-bold">Hoàn Thành</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        </View>
+
+                        {/* Tố cáo */}
+                        <TouchableOpacity 
+                            onPress={() => setShowReportModal(true)}
+                            className="w-full py-4 rounded-xl bg-slate-800 border border-slate-700 items-center justify-center flex-row gap-2"
+                        >
+                            <Ionicons name="warning" size={16} color="#F59E0B" />
+                            <Text className="text-slate-300 font-bold">Tố cáo</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <View className="w-full mt-auto">

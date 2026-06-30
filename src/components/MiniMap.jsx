@@ -130,14 +130,17 @@ export default function MiniMap({ sport, onSelectCourt }) {
         <View style={{ height: 300, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 32 }}>
             <WebView
                 ref={webViewRef}
-                source={{ html: htmlContent }}
+                source={{ html: htmlContent, baseUrl: 'https://api.mapbox.com' }}
                 originWhitelist={['*']}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
                 onMessage={handleMessage}
                 nestedScrollEnabled={true}
                 androidHardwareAccelerationDisabled={false}
-                mixedContentMode="compatibility"
+                mixedContentMode="always"
+                allowFileAccess={true}
+                allowUniversalAccessFromFileURLs={true}
+                allowFileAccessFromFileURLs={true}
             />
         </View>
     );

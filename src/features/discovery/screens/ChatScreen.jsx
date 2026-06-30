@@ -167,17 +167,8 @@ export default function ChatScreen({ navigation, route }) {
 
         setIsSending(true);
 
-        // Optimistic update for sender's UI
-        const tempMsg = {
-            _id: Date.now().toString(),
-            match_id: matchId,
-            sender_id: currentUserId,
-            message: text,
-            createdAt: new Date().toISOString(),
-        };
-        
-        setMessages((prev) => [...prev, tempMsg]);
-
+        // No optimistic update — let the server broadcast handle display
+        // to avoid duplicate messages when both users are online.
         socketRef.current.emit("send_message", {
             matchId,
             message: text,
@@ -185,7 +176,7 @@ export default function ChatScreen({ navigation, route }) {
 
         setInputText("");
         setIsSending(false);
-    }, [inputText, matchId, isDeleted, currentUserId]);
+    }, [inputText, matchId, isDeleted]);
 
     // ── Opponent pay 50% ─────────────────────────────────
     const handlePayDeposit = () => {
@@ -453,11 +444,11 @@ export default function ChatScreen({ navigation, route }) {
                     <TouchableOpacity
                         onPress={() => {
                             Alert.alert(
-                                "Đặt sân chia tiền 🏟️",
-                                "Bạn sẽ đặt sân theo chế độ chia tiền 50/50 với đối thủ. Mỗi người thanh toán một nửa tổng tiền sân.\n\nBạn sẽ được chuyển sang màn hình tìm sân — hãy chọn sân và khung giờ phù hợp.",
+                                "Đặt sân cho trận đấu 🏟️",
+                                "Bạn sẽ đặt sân cho trận đấu này. Bạn có thể chọn chia tiền 50/50 với đối thủ hoặc thanh toán toàn bộ (100%).\n\nBạn sẽ được chuyển sang màn hình tìm sân — hãy chọn sân và khung giờ phù hợp.",
                                 [
                                     { text: "Hủy", style: "cancel" },
-                                    { text: "Chọn sân", onPress: () => navigation.navigate("Tìm Sân", { matchId }) },
+                                    { text: "Chọn sân", onPress: () => navigation.navigate("BottomTabs", { screen: "Tìm Sân", params: { matchId } }) },
                                 ]
                             );
                         }}

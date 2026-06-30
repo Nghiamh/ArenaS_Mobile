@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Dimensions, ActivityIndicator, Modal, FlatList, TextInput } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
@@ -53,9 +53,10 @@ export default function CourtDetailScreen() {
     const [slotsData, setSlotsData] = useState([]);
     const [isFetchingSlots, setIsFetchingSlots] = useState(false);
     const [isLocking, setIsLocking] = useState(false);
-    
+
     const [selectedSubCourt, setSelectedSubCourt] = useState(null);
     const [selectedSlotIndices, setSelectedSlotIndices] = useState([]);
+    const slotScrollRefs = useRef({});
 
     const courtId = route.params?.courtId;
     const matchId = route.params?.matchId || null;
@@ -178,7 +179,7 @@ export default function CourtDetailScreen() {
 
     const handleSlotClick = (subCourtId, index, slot) => {
         if (slot.status !== "available") return;
-        
+
         if (selectedSubCourt !== subCourtId) {
             setSelectedSubCourt(subCourtId);
             setSelectedSlotIndices([index]);
@@ -208,23 +209,23 @@ export default function CourtDetailScreen() {
         const sub = subCourts.find(s => s._id === selectedSubCourt);
         const slots = getSlotsForSubCourt(selectedSubCourt);
         const selectedSlots = selectedSlotIndices.map(i => slots[i]);
-        
+
         const startTime = selectedSlots[0].start;
         const endTime = selectedSlots[selectedSlots.length - 1].end;
-        
+
         // Time validation for today's slots
         const now = new Date();
         const selectedD = new Date(selectedDate + 'T00:00:00');
-        
+
         // Check if selected date is today
-        if (now.getFullYear() === selectedD.getFullYear() && 
-            now.getMonth() === selectedD.getMonth() && 
+        if (now.getFullYear() === selectedD.getFullYear() &&
+            now.getMonth() === selectedD.getMonth() &&
             now.getDate() === selectedD.getDate()) {
-            
+
             const [startHour, startMinute] = startTime.split(':').map(Number);
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
-            
+
             if (startHour < currentHour || (startHour === currentHour && startMinute <= currentMinute)) {
                 Alert.alert("Lỗi", "Khung giờ này đã trôi qua. Vui lòng chọn khung giờ khác!");
                 return;
@@ -249,7 +250,7 @@ export default function CourtDetailScreen() {
             // Refresh lại slots
             bookingApi.getCourtSlots(courtId, selectedDate)
                 .then(res => setSlotsData(res.data || []))
-                .catch(() => {});
+                .catch(() => { });
             setSelectedSlotIndices([]);
             setIsLocking(false);
             return;
@@ -314,7 +315,7 @@ export default function CourtDetailScreen() {
                     Chọn một sân từ trang chủ để xem chi tiết.
                 </Text>
                 <TouchableOpacity
-                    onPress={() => navigation.navigate("Trang chủ")}
+                    onPress={() => navigation.navigate("BottomTabs", { screen: "Trang chủ" })}
                     className="mt-4 rounded-full bg-emerald-700 px-6 py-2"
                 >
                     <Text className="text-sm font-bold text-white">Về trang chủ</Text>
@@ -327,18 +328,21 @@ export default function CourtDetailScreen() {
     const courtImages = court.images && court.images.length > 0 ? court.images : [PLACEHOLDER_IMAGE];
     const sportLabel = (court.sports || []).map(getSportNameVI).join(", ") || "Thể thao";
     const amenities = court.amenities || [];
-    const subCourts = court.sub_courts && court.sub_courts.length > 0 
-        ? court.sub_courts 
+    const subCourts = court.sub_courts && court.sub_courts.length > 0
+        ? court.sub_courts
         : [{ _id: '1', name: 'Sân 1', price_per_hour: court.price_per_hour || 190000, type: getCourtSport(court) }, { _id: '2', name: 'Sân 2', price_per_hour: court.price_per_hour || 190000, type: getCourtSport(court) }]; // Fallback data
     const minPrice = subCourts.length > 0
         ? Math.min(...subCourts.map((s) => s.price_per_hour || Infinity))
         : court.price_per_hour || 190000;
 
     const handleDirections = () => {
-        navigation.navigate("Bản đồ", { 
-            latitude: court.coordinates?.latitude, 
-            longitude: court.coordinates?.longitude, 
-            venueName: court.name 
+        navigation.navigate("BottomTabs", {
+            screen: "Bản đồ",
+            params: {
+                latitude: court.coordinates?.latitude,
+                longitude: court.coordinates?.longitude,
+                venueName: court.name
+            }
         });
     };
 
@@ -347,19 +351,19 @@ export default function CourtDetailScreen() {
             <ScrollView className="flex-1" contentContainerClassName="pb-32" showsVerticalScrollIndicator={false}>
                 {/* Header Image Gallery */}
                 <View className="relative h-64 w-full bg-slate-200 dark:bg-slate-900">
-                    <ScrollView 
-                        horizontal 
-                        pagingEnabled 
+                    <ScrollView
+                        horizontal
+                        pagingEnabled
                         showsHorizontalScrollIndicator={false}
                         onScroll={onScroll}
                         scrollEventThrottle={16}
                         className="h-full w-full"
                     >
                         {courtImages.map((uri, index) => (
-                            <Image 
+                            <Image
                                 key={index}
-                                source={{ uri }} 
-                                style={{ width, height: 256 }} 
+                                source={{ uri }}
+                                style={{ width, height: 256 }}
                                 resizeMode="cover"
                             />
                         ))}
@@ -368,8 +372,8 @@ export default function CourtDetailScreen() {
                     {/* Pagination Dots */}
                     <View pointerEvents="none" className="absolute bottom-4 left-0 right-0 flex-row justify-center gap-1.5 z-10">
                         {courtImages.map((_, index) => (
-                            <View 
-                                key={index} 
+                            <View
+                                key={index}
                                 className={`h-1.5 rounded-full ${activeIndex === index ? 'w-5 bg-emerald-500 dark:bg-white' : 'w-1.5 bg-white/70 dark:bg-white/50'}`}
                             />
                         ))}
@@ -377,13 +381,13 @@ export default function CourtDetailScreen() {
 
                     {/* Top Bar Actions */}
                     <View pointerEvents="box-none" className="absolute left-4 right-4 top-12 flex-row justify-between z-10">
-                        <TouchableOpacity 
-                            onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Trang chủ")}
+                        <TouchableOpacity
+                            onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("BottomTabs", { screen: "Trang chủ" })}
                             className="h-10 w-10 items-center justify-center rounded-full bg-white/70 dark:bg-black/40"
                         >
                             <Ionicons name="arrow-back" size={20} color={isDark ? "white" : "black"} />
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={() => Alert.alert("Yêu thích", "Đã thêm vào danh sách yêu thích!")}
                             className="h-10 w-10 items-center justify-center rounded-full bg-white/70 dark:bg-black/40"
                         >
@@ -413,7 +417,7 @@ export default function CourtDetailScreen() {
                                 </Text>
                             </View>
                         </View>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={handleDirections}
                             className="flex-row items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2"
                         >
@@ -460,7 +464,7 @@ export default function CourtDetailScreen() {
 
                 {/* Date Selector */}
                 <View className="mt-6 flex-row items-center justify-between px-4">
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => {
                             const d = new Date(selectedDate + 'T00:00:00');
                             d.setDate(d.getDate() - 1);
@@ -475,7 +479,7 @@ export default function CourtDetailScreen() {
                         <Ionicons name="calendar-outline" size={16} color="#059669" />
                         <Text className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{new Date(selectedDate + 'T00:00:00').toLocaleDateString("vi-VN", { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => {
                             const d = new Date(selectedDate + 'T00:00:00');
                             d.setDate(d.getDate() + 1);
@@ -495,13 +499,13 @@ export default function CourtDetailScreen() {
                                 const year = current.getFullYear();
                                 const month = current.getMonth();
                                 const today = new Date();
-                                today.setHours(0,0,0,0);
+                                today.setHours(0, 0, 0, 0);
                                 const firstDay = new Date(year, month, 1).getDay();
                                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                                 const days = [];
                                 for (let i = 0; i < firstDay; i++) days.push(null);
                                 for (let i = 1; i <= daysInMonth; i++) days.push(i);
-                                const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+                                const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
                                 return (
                                     <>
                                         <View className="flex-row items-center justify-between mb-4">
@@ -520,14 +524,14 @@ export default function CourtDetailScreen() {
                                             </TouchableOpacity>
                                         </View>
                                         <View className="flex-row justify-between mb-2">
-                                            {['CN','T2','T3','T4','T5','T6','T7'].map(d => (
+                                            {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(d => (
                                                 <Text key={d} className="w-[14%] text-center text-xs font-bold text-appText/50">{d}</Text>
                                             ))}
                                         </View>
                                         <View className="flex-row flex-wrap">
                                             {days.map((day, idx) => {
-                                                if (day === null) return <View key={`e${idx}`} style={{width:'14.28%',height:40}} />;
-                                                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                                if (day === null) return <View key={`e${idx}`} style={{ width: '14.28%', height: 40 }} />;
+                                                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                                                 const dateObj = new Date(dateStr + 'T00:00:00');
                                                 const isPast = dateObj < today;
                                                 const isSelected = dateStr === selectedDate;
@@ -537,7 +541,7 @@ export default function CourtDetailScreen() {
                                                         key={day}
                                                         disabled={isPast}
                                                         onPress={() => { setSelectedDate(dateStr); setShowCalendar(false); }}
-                                                        style={{width:'14.28%',height:40,alignItems:'center',justifyContent:'center'}}
+                                                        style={{ width: '14.28%', height: 40, alignItems: 'center', justifyContent: 'center' }}
                                                     >
                                                         <View className={`h-8 w-8 rounded-full items-center justify-center ${isSelected ? 'bg-emerald-600' : isToday ? 'border border-emerald-500' : ''}`}>
                                                             <Text className={`text-sm font-semibold ${isPast ? 'text-appText/20' : isSelected ? 'text-white' : 'text-appText'}`}>{day}</Text>
@@ -564,18 +568,45 @@ export default function CourtDetailScreen() {
                             return (
                                 <View key={sub._id || idx} className="rounded-xl border border-appText/10 bg-appSurface p-3 flex-row items-center shadow-sm shadow-black/5">
                                     <Text className="w-14 text-sm font-bold text-appText">{sub.name}</Text>
-                                    
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerClassName="gap-2"
+                                        ref={(ref) => { if (ref) slotScrollRefs.current[sub._id] = ref; }}
+                                        onLayout={() => {
+                                            // Auto-scroll to first available slot
+                                            const now = new Date();
+                                            const selectedD = new Date(selectedDate + 'T00:00:00');
+                                            const isToday = now.getFullYear() === selectedD.getFullYear() &&
+                                                now.getMonth() === selectedD.getMonth() &&
+                                                now.getDate() === selectedD.getDate();
+                                            if (isToday && slots.length > 0) {
+                                                const firstAvailIdx = slots.findIndex((s) => {
+                                                    const [h, m] = s.start.split(':').map(Number);
+                                                    const notPassed = h > now.getHours() || (h === now.getHours() && m > now.getMinutes());
+                                                    return notPassed && s.status === 'available';
+                                                });
+                                                if (firstAvailIdx > 0) {
+                                                    const SLOT_WIDTH = 72; // min-w-[64px] + gap-2 (8px)
+                                                    const offset = Math.max(0, (firstAvailIdx - 1) * SLOT_WIDTH);
+                                                    setTimeout(() => {
+                                                        slotScrollRefs.current[sub._id]?.scrollTo({ x: offset, animated: false });
+                                                    }, 50);
+                                                }
+                                            }
+                                        }}
+                                    >
                                         {slots.length === 0 ? (
                                             <Text className="text-xs text-appText/50 italic">Không có lịch</Text>
                                         ) : (
                                             slots.map((slot, sIdx) => {
                                                 const now = new Date();
                                                 const selectedD = new Date(selectedDate + 'T00:00:00');
-                                                const isToday = now.getFullYear() === selectedD.getFullYear() && 
-                                                                now.getMonth() === selectedD.getMonth() && 
-                                                                now.getDate() === selectedD.getDate();
-                                                
+                                                const isToday = now.getFullYear() === selectedD.getFullYear() &&
+                                                    now.getMonth() === selectedD.getMonth() &&
+                                                    now.getDate() === selectedD.getDate();
+
                                                 let isPassed = false;
                                                 if (isToday) {
                                                     const [startH, startM] = slot.start.split(':').map(Number);
@@ -588,12 +619,12 @@ export default function CourtDetailScreen() {
                                                 const isLocked = !isPassed && slot.status === "locked";
                                                 const isBooked = !isPassed && slot.status === "booked";
                                                 const isSelected = selectedSubCourt === sub._id && selectedSlotIndices.includes(sIdx);
-                                                
+
                                                 let bgColor = "bg-red-100 dark:bg-red-900/30";
                                                 let textColor = "text-red-500 dark:text-red-400";
                                                 let subTextColor = "text-red-400 dark:text-red-500";
                                                 let label = "Đã đặt";
-                                                
+
                                                 if (isPassed) {
                                                     bgColor = "bg-slate-200 dark:bg-slate-800";
                                                     textColor = "text-slate-400 dark:text-slate-600";
@@ -612,7 +643,7 @@ export default function CourtDetailScreen() {
                                                 }
 
                                                 return (
-                                                    <TouchableOpacity 
+                                                    <TouchableOpacity
                                                         key={sIdx}
                                                         onPress={() => isPassed ? null : handleSlotClick(sub._id, sIdx, slot)}
                                                         activeOpacity={isAvailable ? 0.7 : 1}
@@ -717,7 +748,7 @@ export default function CourtDetailScreen() {
                             className="bg-appSurface border border-appText/10 rounded-xl p-4 text-appText min-h-[100px] mb-6"
                         />
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={handleSubmitReview}
                             disabled={isSubmittingReview}
                             className={`rounded-xl py-3.5 items-center flex-row justify-center ${isSubmittingReview ? 'bg-emerald-600/70' : 'bg-emerald-600'}`}
@@ -735,7 +766,7 @@ export default function CourtDetailScreen() {
                 {matchId && (
                     <View className="flex-row items-center gap-2 mb-3 px-1">
                         <Ionicons name="people-outline" size={16} color="#059669" />
-                        <Text className="text-xs font-bold text-emerald-600">Đặt sân chia tiền 50/50 — bạn chỉ trả một nửa</Text>
+                        <Text className="text-xs font-bold text-emerald-600">Đặt sân cùng bạn mới</Text>
                     </View>
                 )}
                 <View className="flex-row items-center justify-between">
@@ -745,7 +776,7 @@ export default function CourtDetailScreen() {
                         </Text>
                         <Text className="mt-1 text-xs font-medium text-appText/60">
                             {matchId ? 'Bạn cọc: ' : 'Giá: '}<Text className="text-sm font-bold text-emerald-600">
-                                {selectedSlotIndices.length > 0 
+                                {selectedSlotIndices.length > 0
                                     ? formatPrice(matchId
                                         ? Math.ceil((subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length / 2)
                                         : (subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length)
@@ -753,16 +784,16 @@ export default function CourtDetailScreen() {
                             </Text>
                         </Text>
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={handleBookNow}
-                        className={`rounded-xl px-8 py-3.5 shadow-md flex-row items-center gap-2 ${selectedSlotIndices.length > 0 && !isLocking 
-                            ? matchId ? 'bg-amber-500 shadow-amber-900/20' : 'bg-emerald-600 shadow-emerald-900/20' 
+                        className={`rounded-xl px-8 py-3.5 shadow-md flex-row items-center gap-2 ${selectedSlotIndices.length > 0 && !isLocking
+                            ? matchId ? 'bg-amber-500 shadow-amber-900/20' : 'bg-emerald-600 shadow-emerald-900/20'
                             : 'bg-appText/20'}`}
                         disabled={selectedSlotIndices.length === 0 || isLocking}
                     >
                         {isLocking ? <ActivityIndicator size="small" color="white" /> : null}
                         <Text className="text-sm font-bold text-white text-center">
-                            {isLocking ? "Đang giữ chỗ..." : matchId ? "Đặt cọc 50%" : "Đặt sân ngay"}
+                            {isLocking ? "Đang giữ chỗ..." : matchId ? "Đặt cọc " : "Đặt sân ngay"}
                         </Text>
                     </TouchableOpacity>
                 </View>

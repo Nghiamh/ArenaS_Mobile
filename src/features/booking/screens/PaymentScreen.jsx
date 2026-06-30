@@ -16,6 +16,7 @@ export default function PaymentScreen() {
     const dispatch = useDispatch();
     const [selectedMethod, setSelectedMethod] = useState("wallet");
     const [isBooking, setIsBooking] = useState(false);
+    const [matchPaymentMode, setMatchPaymentMode] = useState('split');
 
     // Wallet
     const [walletBalance, setWalletBalance] = useState(null);
@@ -89,7 +90,7 @@ export default function PaymentScreen() {
             } catch (e) { /* BE sẽ tự unlock sau timeout */ }
             dispatch(resetBooking());
         }
-        navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Trang chủ");
+        navigation.canGoBack() ? navigation.goBack() : navigation.navigate("BottomTabs", { screen: "Trang chủ" });
     };
 
     if (!checkoutDraft) {
@@ -107,8 +108,8 @@ export default function PaymentScreen() {
     const isMatchBooking = !!checkoutDraft.matchId;
     const discountAmount = appliedVoucher?.discountAmount || 0;
     const finalAmount = Math.max(0, checkoutDraft.totalPrice - discountAmount);
-    // For match booking: user only pays 50% (ceil for odd amounts)
-    const chargedAmount = isMatchBooking ? Math.ceil(finalAmount / 2) : finalAmount;
+    // For match booking: user can pay 50% or 100%
+    const chargedAmount = isMatchBooking ? (matchPaymentMode === 'split' ? Math.ceil(finalAmount / 2) : finalAmount) : finalAmount;
 
     // Validate voucher
     const handleValidateVoucher = async (code) => {
@@ -156,17 +157,28 @@ export default function PaymentScreen() {
                 start_time: checkoutDraft.startTime,
                 end_time: checkoutDraft.endTime,
                 voucher_code: appliedVoucher?.voucher?.code || undefined,
-                ...(isMatchBooking ? { match_id: checkoutDraft.matchId } : {}),
+                ...(isMatchBooking ? { match_id: checkoutDraft.matchId, payment_type: matchPaymentMode } : {}),
             };
             await bookingApi.userBookCourt(data);
             Alert.alert(
-                isMatchBooking ? "Đặt cọc thành công! 🎉" : "Thành công 🎉",
-                isMatchBooking
-                    ? `Bạn đã đặt cọc ${formatPrice(chargedAmount)} (50%). Đối thủ có 30 phút để thanh toán phần còn lại.`
-                    : "Đặt sân thành công! Tiền đã được trừ từ ví."
+                isMatchBooking && matchPaymentMode === 'split' ? "Đặt cọc thành công!" : "Đặt sân thành công!",
+                isMatchBooking && matchPaymentMode === 'split'
+                    ? "Bạn đã thanh toán 50%. Đợi đối thủ hoàn tất."
+                    : "Tiền đã được trừ từ ví của bạn.",
+                [
+                    {
+                        text: isMatchBooking ? "Về trang ghép kèo" : "Về trang chủ",
+                        onPress: () => {
+                            dispatch(resetBooking());
+                            if (isMatchBooking) {
+                                navigation.navigate("BottomTabs", { screen: "Ghép Kèo" });
+                            } else {
+                                navigation.navigate("BottomTabs", { screen: "Trang chủ" });
+                            }
+                        }
+                    }
+                ]
             );
-            dispatch(resetBooking());
-            navigation.navigate("Trang chủ");
         } catch (error) {
             const errorMessage = error.response?.data?.error || error.response?.data?.message || "Có lỗi xảy ra khi đặt sân.";
             Alert.alert("Lỗi", errorMessage);
@@ -220,7 +232,9 @@ export default function PaymentScreen() {
                         {isMatchBooking && (
                             <View className="flex-row items-center gap-2 mb-1 px-1 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/40">
                                 <Ionicons name="people-outline" size={16} color="#D97706" />
-                                <Text className="text-xs font-bold text-amber-700 dark:text-amber-400">Đặt sân chia tiền — mỗi người trả 50%</Text>
+                                <Text className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                                    {matchPaymentMode === 'split' ? "Đặt sân chia tiền — bạn trả 50%" : "Đặt sân ghép kèo — bạn trả 100%"}
+                                </Text>
                             </View>
                         )}
                         <View className="flex-row justify-between">
@@ -249,7 +263,7 @@ export default function PaymentScreen() {
                                     <Text className="text-sm font-bold text-appText">{formatPrice(finalAmount)}</Text>
                                 </View>
                                 <View className="flex-row justify-between">
-                                    <Text className="text-sm font-bold text-amber-600">Bạn đặt cọc (50%)</Text>
+                                    <Text className="text-sm font-bold text-amber-600">Bạn thanh toán ({matchPaymentMode === 'split' ? '50%' : '100%'})</Text>
                                     <Text className="text-base font-bold text-amber-600">{formatPrice(chargedAmount)}</Text>
                                 </View>
                             </>
@@ -261,6 +275,35 @@ export default function PaymentScreen() {
                         )}
                     </View>
                 </View>
+
+                {isMatchBooking && (
+                    <View className="mt-6 mb-3">
+                        <Text className="text-base font-bold text-appText mb-3">Hình thức thanh toán (Ghép kèo)</Text>
+                        <View className="flex-row gap-3">
+                            <TouchableOpacity 
+                                onPress={() => setMatchPaymentMode('split')}
+                                className={`flex-1 rounded-xl p-3 border ${matchPaymentMode === 'split' ? 'bg-emerald-50 border-emerald-500 dark:bg-emerald-900/30' : 'bg-white dark:bg-appSurface border-appText/10'}`}
+                            >
+                                <View className="flex-row items-center gap-2 mb-1">
+                                    <Ionicons name="pie-chart" size={18} color={matchPaymentMode === 'split' ? '#059669' : '#64748B'} />
+                                    <Text className={`font-bold ${matchPaymentMode === 'split' ? 'text-emerald-700 dark:text-emerald-400' : 'text-appText/70'}`}>Chia tiền (50%)</Text>
+                                </View>
+                                <Text className="text-[10px] text-appText/50 leading-tight">Bạn trả 50%, đối thủ trả 50% còn lại.</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                onPress={() => setMatchPaymentMode('full')}
+                                className={`flex-1 rounded-xl p-3 border ${matchPaymentMode === 'full' ? 'bg-emerald-50 border-emerald-500 dark:bg-emerald-900/30' : 'bg-white dark:bg-appSurface border-appText/10'}`}
+                            >
+                                <View className="flex-row items-center gap-2 mb-1">
+                                    <Ionicons name="checkmark-circle" size={18} color={matchPaymentMode === 'full' ? '#059669' : '#64748B'} />
+                                    <Text className={`font-bold ${matchPaymentMode === 'full' ? 'text-emerald-700 dark:text-emerald-400' : 'text-appText/70'}`}>Trả toàn bộ (100%)</Text>
+                                </View>
+                                <Text className="text-[10px] text-appText/50 leading-tight">Thanh toán luôn 100% tiền sân.</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
 
                 <Text className="text-base font-bold text-appText mt-6 mb-3">Phương thức thanh toán</Text>
                 <View className="gap-3">
@@ -326,7 +369,7 @@ export default function PaymentScreen() {
             <View className="absolute bottom-0 left-0 right-0 border-t border-appText/10 bg-[#F8FAFC] dark:bg-appBg px-5 py-4" style={{ paddingBottom: 24 }}>
                 <View className="flex-row items-center justify-between mb-3">
                     <Text className="text-xs font-semibold text-appText/60">
-                        {isMatchBooking ? 'Số tiền đặt cọc (50%)' : 'Tổng thanh toán'}
+                        {isMatchBooking && matchPaymentMode === 'split' ? 'Số tiền đặt cọc (50%)' : 'Tổng thanh toán'}
                     </Text>
                     <Text className="text-xl font-bold text-appText">{formatPrice(chargedAmount)}</Text>
                 </View>
@@ -346,13 +389,13 @@ export default function PaymentScreen() {
                         disabled={isBooking}
                         className={`rounded-xl py-3.5 shadow-md flex-row items-center justify-center ${
                             isBooking ? 'bg-emerald-600/70' 
-                            : isMatchBooking ? 'bg-amber-500 shadow-amber-900/20'
+                            : isMatchBooking && matchPaymentMode === 'split' ? 'bg-amber-500 shadow-amber-900/20'
                             : 'bg-[#007F3F] dark:bg-emerald-700 shadow-emerald-900/20'
                         }`}
                     >
                         {isBooking ? <ActivityIndicator color="white" className="mr-2" /> : null}
                         <Text className="text-base font-bold text-white text-center">
-                            {isMatchBooking ? 'ĐẶT CỌC 50% NGAY' : 'THANH TOÁN NGAY'}
+                            {isMatchBooking && matchPaymentMode === 'split' ? 'ĐẶT CỌC 50% NGAY' : 'THANH TOÁN NGAY'}
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -395,26 +438,49 @@ export default function PaymentScreen() {
                                         const discountLabel = v.discountType === 'percent' ? `Giảm ${v.discountValue}%` : `Giảm ${(v.discountValue || 0).toLocaleString("vi-VN")}đ`;
                                         const minLabel = v.minOrderValue > 0 ? `Đơn tối thiểu ${(v.minOrderValue).toLocaleString("vi-VN")}đ` : "Không yêu cầu tối thiểu";
                                         const needsPoints = v.pointsCost > 0;
-                                        const isGrayedOut = needsPoints && userPoints < v.pointsCost;
+                                        const notEnoughPoints = needsPoints && userPoints < v.pointsCost;
+
+                                        // Check all disqualifying conditions
+                                        const isExpired = v.expiryDate && new Date(v.expiryDate) < new Date();
+                                        const isFullyUsed = v.maxUses && v.usedCount >= v.maxUses;
+                                        // A free voucher is already used if isUsedByMe is true
+                                        const isAlreadyUsed = v.pointsCost === 0 && v.isUsedByMe === true;
+                                        const belowMinOrder = v.minOrderValue > 0 && checkoutDraft?.totalPrice < v.minOrderValue;
+                                        const isGrayedOut = notEnoughPoints || isExpired || isFullyUsed || isAlreadyUsed || belowMinOrder;
+
+                                        // Determine reason
+                                        let disabledReason = '';
+                                        if (isExpired) disabledReason = 'Đã hết hạn';
+                                        else if (isFullyUsed) disabledReason = 'Đã hết lượt dùng';
+                                        else if (isAlreadyUsed) disabledReason = 'Đã sử dụng';
+                                        else if (belowMinOrder) disabledReason = `Cần tối thiểu ${(v.minOrderValue).toLocaleString("vi-VN")}đ`;
+                                        else if (notEnoughPoints) disabledReason = `Cần ${v.pointsCost} pts`;
 
                                         return (
                                             <TouchableOpacity
                                                 key={v._id || v.code}
                                                 onPress={() => handleValidateVoucher(v.code)}
                                                 disabled={isGrayedOut}
-                                                className={`flex-row items-center rounded-2xl bg-appSurface border border-appText/5 p-4 gap-3 ${isGrayedOut ? 'opacity-50' : ''}`}
+                                                className={`flex-row items-center rounded-2xl bg-appSurface border p-4 gap-3 ${isGrayedOut ? 'opacity-40 border-appText/5' : 'border-appText/5'}`}
                                             >
-                                                <View className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 items-center justify-center">
-                                                    <MaterialCommunityIcons name="ticket-percent" size={24} color="#059669" />
+                                                <View className={`h-12 w-12 rounded-full items-center justify-center ${isGrayedOut ? 'bg-slate-200 dark:bg-slate-800' : 'bg-emerald-100 dark:bg-emerald-900/40'}`}>
+                                                    <MaterialCommunityIcons name="ticket-percent" size={24} color={isGrayedOut ? "#94A3B8" : "#059669"} />
                                                 </View>
                                                 <View className="flex-1">
-                                                    <Text className="text-sm font-bold text-appText">{v.name || v.code}</Text>
-                                                    <Text className="text-xs text-emerald-600 font-semibold">{discountLabel}</Text>
+                                                    <Text className={`text-sm font-bold ${isGrayedOut ? 'text-appText/40' : 'text-appText'}`}>{v.name || v.code}</Text>
+                                                    <Text className={`text-xs font-semibold ${isGrayedOut ? 'text-appText/30' : 'text-emerald-600'}`}>{discountLabel}</Text>
                                                     <Text className="text-[10px] text-appText/50 mt-0.5">{minLabel} · HSD: {v.expiryDate ? new Date(v.expiryDate).toLocaleDateString("vi-VN") : 'Vô hạn'}</Text>
+                                                    {isGrayedOut && disabledReason ? (
+                                                        <Text className="text-[10px] text-red-400 font-bold mt-0.5">{disabledReason}</Text>
+                                                    ) : null}
                                                 </View>
-                                                {needsPoints ? (
+                                                {isGrayedOut ? (
+                                                    <View className="bg-slate-200 dark:bg-slate-800 px-3 py-1.5 rounded-lg">
+                                                        <Ionicons name="close-circle-outline" size={16} color="#94A3B8" />
+                                                    </View>
+                                                ) : needsPoints ? (
                                                     <View className="bg-amber-100 dark:bg-amber-900/30 px-3 py-1.5 rounded-lg flex-row items-center gap-1">
-                                                        <Text className={`text-xs font-bold ${isGrayedOut ? 'text-amber-600/50' : 'text-amber-600'}`}>{v.pointsCost} pts</Text>
+                                                        <Text className="text-xs font-bold text-amber-600">{v.pointsCost} pts</Text>
                                                     </View>
                                                 ) : (
                                                     <View className="bg-emerald-100 dark:bg-emerald-900/30 px-3 py-1.5 rounded-lg">

@@ -67,15 +67,60 @@ export default function ProfileScreen() {
         .filter(b => b.date >= tenDaysAgoStr)
         .map(b => {
             let status = b.status;
-            if ((status === "confirmed" || status === "pending") && b.date < todayStr) {
-                status = "completed";
+            // Override waiting_opponent to confirmed if the user paid 100%
+            if (status === "waiting_opponent" && b.participants) {
+                const totalPaid = b.participants.reduce((sum, p) => p.status === 'paid' ? sum + p.amount : sum, 0);
+                if (totalPaid >= b.total_price) {
+                    status = "confirmed";
+                }
+            }
+            if (status === "confirmed" || status === "pending") {
+                if (b.date < todayStr) {
+                    status = "completed";
+                } else if (b.date === todayStr) {
+                    const currentHour = todayObj.getHours();
+                    const currentMinute = todayObj.getMinutes();
+                    const endTimeStr = b.end_time || b.endTime || "23:59";
+                    const [endHour, endMinute] = endTimeStr.split(':').map(Number);
+                    
+                    if (currentHour > endHour || (currentHour === endHour && currentMinute >= endMinute)) {
+                        status = "completed";
+                    }
+                }
             }
             return { ...b, displayStatus: status };
         });
 
-    const filteredBookings = bookingFilter === "all"
+    const statusWeight = {
+        confirmed: 1,
+        waiting_opponent: 1,
+        pending: 2,
+        completed: 3,
+        cancelled: 4
+    };
+
+    const sortedBookings = (bookingFilter === "all"
         ? processedBookings
-        : processedBookings.filter(b => (b.displayStatus === "confirmed" || b.displayStatus === "pending") && b.date >= todayStr);
+        : processedBookings.filter(b => (b.displayStatus === "confirmed" || b.displayStatus === "pending") && b.date >= todayStr)
+    ).sort((a, b) => {
+        const wA = statusWeight[a.displayStatus] || 99;
+        const wB = statusWeight[b.displayStatus] || 99;
+        
+        if (wA !== wB) return wA - wB;
+        
+        if (a.date !== b.date) {
+            // Completed/Cancelled: newest first (descending)
+            // Upcoming: nearest first (ascending)
+            if (wA >= 3) return b.date.localeCompare(a.date);
+            return a.date.localeCompare(b.date);
+        }
+
+        const tA = a.start_time || a.startTime || "00:00";
+        const tB = b.start_time || b.startTime || "00:00";
+        
+        if (wA >= 3) return tB.localeCompare(tA);
+        return tA.localeCompare(tB);
+    });
 
 
     const handleCancelBooking = (booking) => {
@@ -383,7 +428,7 @@ export default function ProfileScreen() {
                 <View className="mt-4 gap-4">
                     {isLoadingBookings ? (
                         <ActivityIndicator size="small" color="#059669" className="my-4" />
-                    ) : filteredBookings.length === 0 ? (
+                    ) : sortedBookings.length === 0 ? (
                         <View className="items-center py-10 w-full rounded-2xl bg-appSurface border border-appText/10 shadow-sm shadow-black/5 justify-center">
                             <Ionicons name="calendar-outline" size={40} color={isDark ? "#475569" : "#94A3B8"} />
                             <Text className="mt-3 text-sm text-appText/60">Chưa có đơn đặt sân nào</Text>
@@ -392,10 +437,10 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        filteredBookings.slice(0, 5).map(b => {
-                            const statusMap = { confirmed: 'Đã xác nhận', pending: 'Chờ xử lý', cancelled: 'Đã hủy', completed: 'Hoàn thành' };
-                            const statusColor = { confirmed: 'text-emerald-600', pending: 'text-amber-600', cancelled: 'text-red-500', completed: 'text-blue-600' };
-                            const bgColor = { confirmed: 'bg-emerald-100 dark:bg-emerald-900/30', pending: 'bg-amber-100 dark:bg-amber-900/30', cancelled: 'bg-red-100 dark:bg-red-900/30', completed: 'bg-blue-100 dark:bg-blue-900/30' };
+                        sortedBookings.slice(0, 5).map(b => {
+                            const statusMap = { confirmed: 'Đã xác nhận', pending: 'Chờ xử lý', cancelled: 'Đã hủy', completed: 'Hoàn thành', waiting_opponent: 'Chờ đối thủ' };
+                            const statusColor = { confirmed: 'text-emerald-600', pending: 'text-amber-600', cancelled: 'text-red-500', completed: 'text-blue-600', waiting_opponent: 'text-orange-600' };
+                            const bgColor = { confirmed: 'bg-emerald-100 dark:bg-emerald-900/30', pending: 'bg-amber-100 dark:bg-amber-900/30', cancelled: 'bg-red-100 dark:bg-red-900/30', completed: 'bg-blue-100 dark:bg-blue-900/30', waiting_opponent: 'bg-orange-100 dark:bg-orange-900/30' };
                             return (
                                 <TouchableOpacity
                                     key={b._id || b.id}
@@ -465,10 +510,11 @@ export default function ProfileScreen() {
                     <View className="bg-white dark:bg-appBg rounded-t-3xl pt-5 pb-8 px-5">
                         {selectedBooking && (() => {
                             const b = selectedBooking;
-                            const statusMap = { confirmed: 'Đã xác nhận', pending: 'Chờ xử lý', cancelled: 'Đã hủy', completed: 'Hoàn thành' };
-                            const statusColor = { confirmed: 'text-emerald-600', pending: 'text-amber-600', cancelled: 'text-red-500', completed: 'text-blue-600' };
-                            const bgColor = { confirmed: 'bg-emerald-100 dark:bg-emerald-900/30', pending: 'bg-amber-100 dark:bg-amber-900/30', cancelled: 'bg-red-100 dark:bg-red-900/30', completed: 'bg-blue-100 dark:bg-blue-900/30' };
+                            const statusMap = { confirmed: 'Đã xác nhận', pending: 'Chờ xử lý', cancelled: 'Đã hủy', completed: 'Hoàn thành', waiting_opponent: 'Chờ đối thủ' };
+                            const statusColor = { confirmed: 'text-emerald-600', pending: 'text-amber-600', cancelled: 'text-red-500', completed: 'text-blue-600', waiting_opponent: 'text-orange-600' };
+                            const bgColor = { confirmed: 'bg-emerald-100 dark:bg-emerald-900/30', pending: 'bg-amber-100 dark:bg-amber-900/30', cancelled: 'bg-red-100 dark:bg-red-900/30', completed: 'bg-blue-100 dark:bg-blue-900/30', waiting_opponent: 'bg-orange-100 dark:bg-orange-900/30' };
                             const canCancel = b.displayStatus === "confirmed" || b.displayStatus === "pending" || b.displayStatus === "waiting_opponent";
+                            const opponent = b.match_id?.participants?.find(p => p._id !== user.id && p._id !== user._id);
 
                             return (
                                 <>
@@ -500,6 +546,12 @@ export default function ProfileScreen() {
                                                 <Text className="text-sm text-appText/60">Giờ đặt</Text>
                                                 <Text className="text-sm font-semibold text-appText">{b.start_time || b.startTime} - {b.end_time || b.endTime}</Text>
                                             </View>
+                                            {opponent ? (
+                                                <View className="flex-row justify-between">
+                                                    <Text className="text-sm text-amber-600">Đối thủ</Text>
+                                                    <Text className="text-sm font-semibold text-amber-600">{opponent.name || opponent.userName}</Text>
+                                                </View>
+                                            ) : null}
                                             {b.voucher_code ? (
                                                 <View className="flex-row justify-between">
                                                     <Text className="text-sm text-emerald-600">Voucher</Text>

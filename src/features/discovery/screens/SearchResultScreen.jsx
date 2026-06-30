@@ -92,13 +92,12 @@ export default function SearchResultScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Split-pay banner khi đến từ Chat */}
+                {/* Match booking banner khi đến từ Chat */}
                 {matchId && (
                     <View className="mx-4 mt-3 px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50 rounded-xl flex-row items-center gap-3">
                         <Ionicons name="people-outline" size={20} color="#059669" />
                         <View className="flex-1">
-                            <Text className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Đặt sân chia tiền 50/50</Text>
-                            <Text className="text-[11px] text-emerald-600/70 dark:text-emerald-500/70 mt-0.5">Chọn sân bên dưới — mỗi người trả một nửa.</Text>
+                            <Text className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Đặt sân cho trận đấu</Text>
                         </View>
                     </View>
                 )}
@@ -209,7 +208,7 @@ export default function SearchResultScreen() {
                                                 style={{ backgroundColor: matchId ? '#D97706' : '#10B981' }}
                                                 onPress={() => navigation.navigate("Đặt lịch", { courtId: court._id || court.id, matchId })}
                                             >
-                                                <Text className="text-xs font-bold text-white">{matchId ? 'CHIA TIỀN' : 'ĐẶT NGAY'}</Text>
+                                                <Text className="text-xs font-bold text-white">{matchId ? 'CHỌN SÂN' : 'ĐẶT NGAY'}</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>

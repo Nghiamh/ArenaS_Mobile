@@ -4,6 +4,7 @@ import { WebView } from "react-native-webview";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import * as Location from 'expo-location';
+import { Ionicons } from "@expo/vector-icons";
 
 export default function MapScreen() {
     const route = useRoute();
@@ -14,7 +15,7 @@ export default function MapScreen() {
     const [isLoadingLoc, setIsLoadingLoc] = useState(true);
     const [searchAddress, setSearchAddress] = useState("");
     const [isSearching, setIsSearching] = useState(false);
-    
+
     // Nếu được điều hướng từ chi tiết sân, sẽ có latitude/longitude
     const { latitude, longitude, venueName, mode, sport } = route.params || {};
 
@@ -67,7 +68,7 @@ export default function MapScreen() {
         return price.toLocaleString("vi-VN") + "đ/giờ";
     };
 
-    const displayVenues = sport 
+    const displayVenues = sport
         ? venues.filter(v => {
             const baseSport = sport.split('_')[0].toLowerCase();
             return v.sports && v.sports.some(s => s.toLowerCase().includes(baseSport));
@@ -94,7 +95,7 @@ export default function MapScreen() {
                 </div>
             `;
             const safePopupHtml = popupHtml.replace(/[\r\n]+/g, '').replace(/'/g, "\\'");
-            
+
             return `
                 {
                     const el = document.createElement('div');
@@ -228,9 +229,29 @@ export default function MapScreen() {
                     z-index: 999;
                     border-radius: 16px 16px 0 0;
                 }
-                .route-info.active { display: flex; align-items: center; justify-content: space-between; }
+                .route-info.active { display: flex; flex-direction: column; }
+                .route-info-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
                 .route-info .info-text { font-size: 14px; color: #111827; }
                 .route-info .info-text strong { color: #059669; }
+                .btn-vehicle {
+                    padding: 6px 12px;
+                    border: 1px solid #D1D5DB;
+                    background: white;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    margin-right: 8px;
+                }
+                .btn-vehicle.active {
+                    background: #E0F2FE;
+                    border-color: #3B82F6;
+                    color: #1D4ED8;
+                    font-weight: bold;
+                }
+                .vehicle-types { display: flex; margin-bottom: 10px; width: 100%; }
                 .route-info .btn-close-route {
                     background: #EF4444;
                     color: white;
@@ -246,8 +267,14 @@ export default function MapScreen() {
         <body>
             <div id="map"></div>
             <div class="route-info" id="routeInfo">
-                <div class="info-text" id="routeText"></div>
-                <button class="btn-close-route" onclick="clearRoute()">Đóng</button>
+                <div class="vehicle-types">
+                    <button id="btn-driving" class="btn-vehicle active" onclick="drawRoute(window.currentDestLat, window.currentDestLng, 'driving')"> Ô tô</button>
+                    <button id="btn-cycling" class="btn-vehicle" onclick="drawRoute(window.currentDestLat, window.currentDestLng, 'cycling')"> Xe máy</button>
+                </div>
+                <div class="route-info-row">
+                    <div class="info-text" id="routeText"></div>
+                    <button class="btn-close-route" onclick="clearRoute()">Đóng</button>
+                </div>
             </div>
             <script>
                 mapboxgl.accessToken = '${mapboxToken}';
@@ -290,11 +317,22 @@ export default function MapScreen() {
 
                 map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-                // ── In-app directions (giống Grab) ──
-                function drawRoute(destLat, destLng) {
+                // ── In-app directions ──
+                window.currentDestLat = null;
+                window.currentDestLng = null;
+                window.currentProfile = 'driving';
+
+                function drawRoute(destLat, destLng, profile = window.currentProfile) {
+                    window.currentDestLat = destLat;
+                    window.currentDestLng = destLng;
+                    window.currentProfile = profile;
+                    
+                    document.getElementById('btn-driving').className = profile === 'driving' ? 'btn-vehicle active' : 'btn-vehicle';
+                    document.getElementById('btn-cycling').className = profile === 'cycling' ? 'btn-vehicle active' : 'btn-vehicle';
+
                     var origin = window.userLng + ',' + window.userLat;
                     var dest = destLng + ',' + destLat;
-                    var url = 'https://api.mapbox.com/directions/v5/mapbox/driving/' + origin + ';' + dest + '?geometries=geojson&overview=full&access_token=' + mapboxgl.accessToken;
+                    var url = 'https://api.mapbox.com/directions/v5/mapbox/' + profile + '/' + origin + ';' + dest + '?geometries=geojson&overview=full&access_token=' + mapboxgl.accessToken;
                     
                     fetch(url)
                         .then(function(r) { return r.json(); })
@@ -330,7 +368,8 @@ export default function MapScreen() {
                             map.fitBounds(bounds, { padding: 60 });
 
                             // Show route info bar
-                            document.getElementById('routeText').innerHTML = '<strong>' + distKm + ' km</strong> &bull; ' + durMin + ' phút lái xe';
+                            var vehicleText = profile === 'driving' ? 'lái xe' : 'xe máy';
+                            document.getElementById('routeText').innerHTML = '<strong>' + distKm + ' km</strong> &bull; ' + durMin + ' phút ' + vehicleText;
                             document.getElementById('routeInfo').className = 'route-info active';
                         })
                         .catch(function(err) {
@@ -356,7 +395,7 @@ export default function MapScreen() {
             if (data.type === 'VIEW_DETAIL') {
                 navigation.navigate("Đặt lịch", { courtId: data.id });
             } else if (data.type === 'SELECT_COURT') {
-                navigation.navigate("Ghép Kèo", { selectedCourtId: data.id, selectedCourtName: data.name });
+                navigation.navigate("BottomTabs", { screen: "Ghép Kèo", params: { selectedCourtId: data.id, selectedCourtName: data.name } });
             } else if (data.type === 'ROUTE_ERROR') {
                 Alert.alert("Lỗi", "Không thể tìm đường đi. Vui lòng thử lại.");
             } else if (data.type === 'MAP_ERROR') {
@@ -461,59 +500,60 @@ export default function MapScreen() {
         <View style={styles.container}>
             <WebView
                 ref={webViewRef}
-                source={{ html: htmlContent }}
+                source={{ html: htmlContent, baseUrl: 'https://api.mapbox.com' }}
                 style={styles.map}
                 originWhitelist={['*']}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
                 onMessage={handleMessage}
                 androidHardwareAccelerationDisabled={false}
-                mixedContentMode="compatibility"
+                mixedContentMode="always"
                 allowFileAccess={true}
+                allowUniversalAccessFromFileURLs={true}
+                allowFileAccessFromFileURLs={true}
+                onError={(syntheticEvent) => {
+                    const { nativeEvent } = syntheticEvent;
+                    console.warn('[MapScreen] WebView error:', nativeEvent);
+                }}
             />
-            
+
             {/* Search Overlay */}
             {!venueName && (
-                <View style={styles.searchOverlay}>
-                    <View style={styles.searchHeader}>
-                        <Text style={styles.searchTitle}>Tìm sân theo vị trí</Text>
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{displayVenues.length} sân</Text>
-                        </View>
-                    </View>
-                    
-                    <TouchableOpacity 
-                        style={styles.btnMyLocation} 
-                        onPress={handleUseMyLocation}
-                        disabled={isSearching}
-                    >
-                        <Text style={styles.btnMyLocationText}>Dùng vị trí của tôi</Text>
-                    </TouchableOpacity>
-                    
-                    <View style={styles.divider}>
-                        <Text style={styles.dividerText}>HOẶC NHẬP ĐỊA CHỈ</Text>
-                    </View>
-                    
-                    <View style={styles.searchRow}>
+                <View style={styles.searchOverlayContainer}>
+                    <View style={styles.searchOverlay}>
+                        <TouchableOpacity onPress={handleSearchAddress} disabled={isSearching} style={styles.searchIconBtn}>
+                            <Ionicons name="search" size={18} color="#10B981" />
+                        </TouchableOpacity>
+
                         <TextInput
                             style={styles.input}
-                            placeholder="Nhập địa chỉ, quận/huyện..."
+                            placeholder="Tìm địa chỉ, quận/huyện..."
                             value={searchAddress}
                             onChangeText={setSearchAddress}
                             onSubmitEditing={handleSearchAddress}
+                            returnKeyType="search"
                         />
-                        <TouchableOpacity 
-                            style={styles.btnSearch} 
-                            onPress={handleSearchAddress}
+
+                        <View style={styles.dividerVertical} />
+
+                        <TouchableOpacity
+                            style={styles.btnMyLocation}
+                            onPress={handleUseMyLocation}
                             disabled={isSearching}
                         >
                             {isSearching ? (
-                                <ActivityIndicator size="small" color="white" />
+                                <ActivityIndicator size="small" color="#10B981" />
                             ) : (
-                                <Text style={styles.btnSearchText}>Tìm</Text>
+                                <Ionicons name="locate" size={18} color="#10B981" />
                             )}
                         </TouchableOpacity>
                     </View>
+
+                    {displayVenues.length > 0 && (
+                        <View style={styles.badgeFloat}>
+                            <Text style={styles.badgeTextFloat}>Hiển thị {displayVenues.length} sân</Text>
+                        </View>
+                    )}
                 </View>
             )}
         </View>
@@ -527,89 +567,60 @@ const styles = StyleSheet.create({
     map: {
         flex: 1,
     },
-    searchOverlay: {
+    searchOverlayContainer: {
         position: 'absolute',
-        top: 40,
+        top: 50,
         left: 20,
+        right: 20,
+        alignItems: 'center',
+    },
+    searchOverlay: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: 'white',
-        borderRadius: 12,
-        padding: 16,
-        width: 320,
+        borderRadius: 20,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
         elevation: 8,
+        width: '100%',
     },
-    searchHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
+    searchIconBtn: {
+        padding: 4,
     },
-    searchTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
+    input: {
+        flex: 1,
+        fontSize: 13,
+        paddingHorizontal: 8,
         color: '#111827',
     },
-    badge: {
-        backgroundColor: '#D1FAE5',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
+    dividerVertical: {
+        width: 1,
+        height: 16,
+        backgroundColor: '#E5E7EB',
+        marginHorizontal: 8,
     },
-    badgeText: {
+    btnMyLocation: {
+        padding: 4,
+    },
+    badgeFloat: {
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 16,
+        marginTop: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    badgeTextFloat: {
         fontSize: 12,
         color: '#059669',
         fontWeight: 'bold',
     },
-    btnMyLocation: {
-        borderWidth: 1,
-        borderColor: '#10B981',
-        borderRadius: 8,
-        paddingVertical: 8,
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    btnMyLocationText: {
-        color: '#10B981',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    divider: {
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    dividerText: {
-        fontSize: 10,
-        color: '#6B7280',
-        fontWeight: 'bold',
-    },
-    searchRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    input: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        marginRight: 8,
-        fontSize: 14,
-    },
-    btnSearch: {
-        backgroundColor: '#10B981',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    btnSearchText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 14,
-    }
 });

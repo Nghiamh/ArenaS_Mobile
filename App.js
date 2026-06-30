@@ -2,13 +2,15 @@ import "react-native-gesture-handler";
 import "./global.css";
 
 import { useState } from "react";
-import { View } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { NavigationContainer, DefaultTheme, useNavigationContainerRef } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Provider } from "react-redux";
 import { useColorScheme } from "nativewind";
+import { useFonts } from "expo-font";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { store } from "./src/store";
 import AppNavigator from "./src/navigation/AppNavigator";
@@ -24,11 +26,27 @@ configureReanimatedLogger({
 });
 
 export default function App() {
+    // Explicitly load icon fonts — required for APK/production builds
+    // (Expo Go pre-loads them, but standalone builds do not)
+    const [fontsLoaded] = useFonts({
+        ...Ionicons.font,
+        ...MaterialCommunityIcons.font,
+    });
+
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const navigationRef = useNavigationContainerRef();
     const [currentRoute, setCurrentRoute] = useState("");
     const [isNavReady, setIsNavReady] = useState(false);
+
+    // Show nothing (or splash) until icon fonts are ready
+    if (!fontsLoaded) {
+        return (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? "#08101F" : "#F5F7FA" }}>
+                <ActivityIndicator size="large" color="#059669" />
+            </View>
+        );
+    }
 
     const navigationTheme = {
         ...DefaultTheme,
