@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.15,
         shadowRadius: 8,
         elevation: 8,
-        width: '100%',
+        width: '80%',
     },
     searchIconBtn: {
         padding: 4,
