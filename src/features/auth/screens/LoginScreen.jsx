@@ -221,7 +221,7 @@ export default function LoginScreen() {
                     {/* Logo & title */}
                     <View className="items-center mb-8">
                         <Image
-                            source={require("../../../../assets/Img/logo.JPG.jpg")}
+                            source={require("../../../../assets/Img/logo.png")}
                             style={{ width: 80, height: 80, borderRadius: 40 }}
                             resizeMode="cover"
                         />

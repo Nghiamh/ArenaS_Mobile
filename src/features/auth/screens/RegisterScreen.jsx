@@ -199,7 +199,7 @@ export default function RegisterScreen() {
             <View className="flex-row items-center justify-between px-5 pt-12 pb-4 bg-[#F2F7F4]">
                 <View className="flex-row items-center gap-2">
                     <Image
-                        source={require("../../../../assets/Img/logo.JPG.jpg")}
+                        source={require("../../../../assets/Img/logo.png")}
                         style={{ width: 32, height: 32, borderRadius: 16 }}
                         resizeMode="cover"
                     />
