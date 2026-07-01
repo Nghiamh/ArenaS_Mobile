@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import chatApi from "../../../api/chatApi";
-import bookingApi from "../../../api/bookingApi";
+import bookingApi from "../../../api/bookingApi"; // vẫn cần cho opponentPayBooking
 import { getSocket } from "../../../utils/socket";
 
 export default function ChatScreen({ navigation, route }) {
@@ -35,8 +35,7 @@ export default function ChatScreen({ navigation, route }) {
     // ── Load chat history ────────────────────────────────
     useEffect(() => {
         if (!matchId) return;
-        loadHistory();
-        loadPendingDeposit();
+        loadHistory(); // pending_deposit đã được trả về trong response của loadHistory
     }, [matchId]);
 
     const loadHistory = async () => {
@@ -64,18 +63,6 @@ export default function ChatScreen({ navigation, route }) {
         }
     };
 
-    // ── Load pending deposit from booking API ────────────
-    const loadPendingDeposit = async () => {
-        if (!matchId) return;
-        try {
-            const res = await bookingApi.getMatchPendingDeposit(matchId);
-            if (res.data?.pending_deposit) {
-                setPendingDeposit(res.data.pending_deposit);
-            }
-        } catch (err) {
-            // Silently fail — no deposit needed
-        }
-    };
 
     // ── Socket.IO real-time ──────────────────────────────
     useEffect(() => {
@@ -90,6 +77,9 @@ export default function ChatScreen({ navigation, route }) {
 
             // Join the match room
             socket.emit("join_match_room", { matchId });
+
+            // Re-join room sau khi socket reconnect (network hiccup)
+            socket.on("connect", () => socket.emit("join_match_room", { matchId }));
 
             // Listen for new messages
             socket.on("receive_message", handleReceiveMessage);
@@ -109,6 +99,7 @@ export default function ChatScreen({ navigation, route }) {
         return () => {
             if (socketRef.current) {
                 socketRef.current.emit("leave_match_room", { matchId });
+                socketRef.current.off("connect");
                 socketRef.current.off("receive_message", handleReceiveMessage);
                 socketRef.current.off("chat_vote_updated", handleChatVoteUpdated);
                 socketRef.current.off("opponent_deposit_required", handleOpponentDeposit);
@@ -119,15 +110,15 @@ export default function ChatScreen({ navigation, route }) {
 
     const handleReceiveMessage = useCallback((data) => {
         setMessages((prev) => {
-            // Avoid duplicate
+            // Nếu đã có tin nhắn này (server đã confirm) thì không thêm
             if (prev.some((m) => m._id === data._id)) return prev;
-            return [...prev, data];
+            // Xóa tin optimistic của user hiện tại nếu server đang confirm
+            const filtered = prev.filter(m => !String(m._id).startsWith('opt-'));
+            return [...filtered, data];
         });
-
-        // Auto scroll to bottom
         setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        }, 80);
     }, []);
 
     const handleChatVoteUpdated = useCallback((data) => {
@@ -160,23 +151,24 @@ export default function ChatScreen({ navigation, route }) {
         }
     }, [matchId]);
 
-    // ── Send message via socket ──────────────────────────
+    // ── Send message ─────────────────────────────────────
     const handleSend = useCallback(() => {
         const text = inputText.trim();
         if (!text || !socketRef.current || isDeleted) return;
 
-        setIsSending(true);
-
-        // No optimistic update — let the server broadcast handle display
-        // to avoid duplicate messages when both users are online.
-        socketRef.current.emit("send_message", {
-            matchId,
+        // Optimistic update — hiện ngay cho sender, không chờ server broadcast
+        const optimisticMsg = {
+            _id: `opt-${Date.now()}`,
+            sender_id: currentUserId,
             message: text,
-        });
+            createdAt: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, optimisticMsg]);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
 
+        socketRef.current.emit("send_message", { matchId, message: text });
         setInputText("");
-        setIsSending(false);
-    }, [inputText, matchId, isDeleted]);
+    }, [inputText, matchId, isDeleted, currentUserId]);
 
     // ── Opponent pay 50% ─────────────────────────────────
     const handlePayDeposit = () => {

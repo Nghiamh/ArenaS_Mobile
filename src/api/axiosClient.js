@@ -5,7 +5,7 @@ import { getItem, removeItem } from "../utils/storage";
 
 const axiosClient = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 60000,
+    timeout: 12000,
     headers: {
         "Content-Type": "application/json",
         Accept: "application/json",

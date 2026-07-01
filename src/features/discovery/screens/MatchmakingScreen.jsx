@@ -34,6 +34,7 @@ export default function MatchmakingScreen() {
     
     // Timer States
     const [nowTick, setNowTick] = useState(Date.now());
+    const [initialLoading, setInitialLoading] = useState(true); // true cho đến khi check status xong lần đầu
 
     const pollRef = useRef(null);  // useRef để tránh race condition với polling
 
@@ -137,11 +138,21 @@ export default function MatchmakingScreen() {
         };
     }, [status, dispatch]);
 
-    // Kiểm tra trạng thái một lần khi vào màn hình
+    // Kiểm tra trạng thái khi user đã load xong (fix: auth race condition)
     useEffect(() => {
+        const userId = user?._id || user?.id;
+        if (!userId) return; // User chưa load → giữ spinner, đợi
+
+        setInitialLoading(true);
+        let cancelled = false;
+        const fallbackTimer = setTimeout(() => {
+            if (!cancelled) setInitialLoading(false);
+        }, 15000);
+
         const fetchCurrentStatus = async () => {
             try {
                 const res = await matchmakingApi.getStatus();
+                if (cancelled) return;
                 if (res.data?.status === "WAITING") {
                     dispatch(setStatus("WAITING"));
                 } else if (res.data?.status === "MATCHED" || res.data?.status === "CONFIRMED") {
@@ -149,13 +160,10 @@ export default function MatchmakingScreen() {
                     if (match) dispatch(setMatchData(match));
 
                     if (match?.status === "COMPLETED") {
-                        // Match đã completed trong DB trước phiên này — clear state, không bật feedback
-                        // Tránh hiển thị modal rating khi user vào lại màn hình hoặc xem lịch sử
                         dispatch(setStatus("IDLE"));
                         dispatch(setMatchData(null));
                     } else if (match?.status === "CONFIRMED") {
                         dispatch(setStatus("CONFIRMED"));
-                        // Fetch pending deposit if confirmed
                         try {
                             const depRes = await bookingApi.getMatchPendingDeposit(match._id || match.id);
                             if (depRes.data?.pending_deposit) {
@@ -171,11 +179,22 @@ export default function MatchmakingScreen() {
                     }
                 }
             } catch (err) {
-                // Ignore if no active ticket
+                // Ignore: 401 khi chưa auth, hoặc không có ticket
+            } finally {
+                if (!cancelled) {
+                    clearTimeout(fallbackTimer);
+                    setInitialLoading(false);
+                }
             }
         };
         fetchCurrentStatus();
-    }, [dispatch]);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(fallbackTimer);
+        };
+    }, [user?._id, user?.id, dispatch]); // Re-run khi user load xong
+
 
     // Timer for Match Completion — dùng ref để clear chính xác, tránh race condition
     const completionTimerRef = useRef(null);
@@ -585,31 +604,12 @@ export default function MatchmakingScreen() {
                             )}
                         </TouchableOpacity>
 
-                        {/* Từ chối: sáng khi chưa đặt sân, mờ khi đã có booking */}
-                        <TouchableOpacity
-                            onPress={handleDecline}
-                            disabled={isLoading || !!matchData?.scheduled_end_at}
-                            className="w-full py-4 rounded-xl items-center justify-center flex-row gap-2 border"
-                            style={{
-                                borderColor: matchData?.scheduled_end_at ? 'rgba(100,116,139,0.2)' : '#FCA5A5',
-                                backgroundColor: matchData?.scheduled_end_at ? 'transparent' : 'rgba(239,68,68,0.08)',
-                                opacity: matchData?.scheduled_end_at ? 0.45 : 1,
-                            }}
-                        >
-                            <Ionicons name="close-circle-outline" size={20}
-                                color={matchData?.scheduled_end_at ? '#64748B' : '#EF4444'} />
-                            <Text style={{
-                                color: matchData?.scheduled_end_at ? '#64748B' : '#EF4444',
-                                fontWeight: '700', fontSize: 15
-                            }}>Hủy Trận</Text>
-                        </TouchableOpacity>
-
                         {/* Vào Chat */}
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={() => {
                                 const currentUserId = String(user?._id || user?.id);
                                 const opp = matchData?.participants?.find(p => String(p?._id || p?.id) !== currentUserId) || {};
-                                navigation.navigate('Chat', { 
+                                navigation.navigate('Chat', {
                                     matchId: matchData?._id || matchData?.id,
                                     opponentName: opp.name || opp.userName || 'Đối thủ',
                                 });
@@ -620,14 +620,34 @@ export default function MatchmakingScreen() {
                             <Text className="text-white font-bold text-base">Vào Chat</Text>
                         </TouchableOpacity>
 
-                        {/* Tố cáo */}
-                        <TouchableOpacity 
-                            onPress={() => setShowReportModal(true)}
-                            className="w-full py-4 rounded-xl bg-slate-800 border border-slate-700 items-center justify-center flex-row gap-2"
-                        >
-                            <Ionicons name="warning" size={16} color="#F59E0B" />
-                            <Text className="text-slate-300 font-bold">Tố cáo</Text>
-                        </TouchableOpacity>
+                        {/* Tố cáo + Hủy Trận — cùng hàng */}
+                        <View className="flex-row gap-3">
+                            <TouchableOpacity
+                                onPress={() => setShowReportModal(true)}
+                                className="flex-1 py-4 rounded-xl bg-slate-800 border border-slate-700 items-center justify-center flex-row gap-2"
+                            >
+                                <Ionicons name="warning" size={15} color="#F59E0B" />
+                                <Text className="text-slate-300 font-bold text-sm">Tố cáo</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={handleDecline}
+                                disabled={isLoading || !!matchData?.scheduled_end_at}
+                                className="flex-1 py-4 rounded-xl items-center justify-center flex-row gap-2 border"
+                                style={{
+                                    borderColor: matchData?.scheduled_end_at ? 'rgba(100,116,139,0.2)' : '#FCA5A5',
+                                    backgroundColor: matchData?.scheduled_end_at ? 'transparent' : 'rgba(239,68,68,0.08)',
+                                    opacity: matchData?.scheduled_end_at ? 0.45 : 1,
+                                }}
+                            >
+                                <Ionicons name="close-circle-outline" size={15}
+                                    color={matchData?.scheduled_end_at ? '#64748B' : '#EF4444'} />
+                                <Text style={{
+                                    color: matchData?.scheduled_end_at ? '#64748B' : '#EF4444',
+                                    fontWeight: '700', fontSize: 14
+                                }}>Hủy Trận</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 ) : (
                     <View className="w-full mt-auto">
@@ -661,11 +681,19 @@ export default function MatchmakingScreen() {
                 <View className="w-10" />
             </View>
 
-            {status === "WAITING" && renderRadar()}
-            {status === "MATCHED" && renderMatchCard(false)}
-            {status === "CONFIRMED" && renderMatchCard(true)}
+            {/* Loading lần đầu — chờ check status từ server */}
+            {initialLoading && (
+                <View className="flex-1 items-center justify-center py-24">
+                    <ActivityIndicator size="large" color="#059669" />
+                    <Text className="text-appText/50 text-sm mt-3">Đang kiểm tra trạng thái...</Text>
+                </View>
+            )}
 
-            {status === "IDLE" && (
+            {!initialLoading && status === "WAITING" && renderRadar()}
+            {!initialLoading && status === "MATCHED" && renderMatchCard(false)}
+            {!initialLoading && status === "CONFIRMED" && renderMatchCard(true)}
+
+            {!initialLoading && status === "IDLE" && (
                 <View className="px-5 pt-6 pb-8">
 
                     {/* Hero */}
