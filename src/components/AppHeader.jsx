@@ -51,16 +51,6 @@ export default function AppHeader({ showBack = false, containerClassName = "" })
 
             {/* Actions bên phải */}
             <View className="flex-row items-center gap-2 z-10">
-                {!isLoggedIn && (
-                    <TouchableOpacity
-                        onPress={() => navigation.navigate("Đăng nhập")}
-                        className="h-9 px-3 items-center justify-center rounded-full bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
-                    >
-                        <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                            Đăng nhập
-                        </Text>
-                    </TouchableOpacity>
-                )}
                 {isLoggedIn && (
                     <TouchableOpacity
                         onPress={() => navigation.navigate("Thông báo")}

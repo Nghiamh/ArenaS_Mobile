@@ -221,6 +221,14 @@ export default function ProfileScreen() {
     };
 
     if (isGuest || !user) {
+        const handleGuestLogin = async () => {
+            // Dispatch logout để AppNavigator tự switch sang AuthStack (conditional rendering)
+            // Không thể navigate() trực tiếp sang screen thuộc stack khác khi đang ở MainTab
+            await removeItem(STORAGE_KEYS.authToken);
+            await removeItem(STORAGE_KEYS.guestMode);
+            await removeItem(STORAGE_KEYS.user);
+            dispatch(logout());
+        };
         return (
             <View className="flex-1 bg-appBg items-center justify-center px-6">
                 <Ionicons name="person-circle-outline" size={64} color={isDark ? "#475569" : "#94A3B8"} />
@@ -228,7 +236,7 @@ export default function ProfileScreen() {
                     Bạn đang sử dụng ứng dụng với tư cách Khách. Vui lòng đăng nhập để xem hồ sơ và quản lý đặt sân.
                 </Text>
                 <TouchableOpacity
-                    onPress={handleLogout}
+                    onPress={handleGuestLogin}
                     className="mt-6 rounded-full bg-emerald-600 px-8 py-3"
                 >
                     <Text className="text-sm font-bold text-white">Đăng nhập ngay</Text>

@@ -163,20 +163,55 @@ export default function MatchmakingScreen() {
         fetchCurrentStatus();
     }, [dispatch]);
 
-    // Timer for Match Completion
+    // Timer for Match Completion — dùng ref để clear chính xác, tránh race condition
+    const completionTimerRef = useRef(null);
+
     useEffect(() => {
+        // Dọn interval cũ trước
+        if (completionTimerRef.current) {
+            clearInterval(completionTimerRef.current);
+            completionTimerRef.current = null;
+        }
+
         if (status !== "CONFIRMED" || !matchData?.scheduled_end_at) return;
-        const timer = setInterval(() => setNowTick(Date.now()), 1000);
-        return () => clearInterval(timer);
+
+        const endTime = new Date(matchData.scheduled_end_at).getTime();
+        const unlockTime = endTime - 15 * 60 * 1000;
+
+        // Đã mở khóa rồi — set một lần, không cần interval
+        if (Date.now() >= unlockTime) {
+            setNowTick(Date.now());
+            return;
+        }
+
+        completionTimerRef.current = setInterval(() => {
+            const now = Date.now();
+            setNowTick(now);
+            if (now >= unlockTime) {
+                clearInterval(completionTimerRef.current);
+                completionTimerRef.current = null;
+            }
+        }, 1000);
+
+        return () => {
+            if (completionTimerRef.current) {
+                clearInterval(completionTimerRef.current);
+                completionTimerRef.current = null;
+            }
+        };
     }, [status, matchData?.scheduled_end_at]);
 
     const completeUnlockInfo = useMemo(() => {
-        if (!matchData || !matchData.scheduled_end_at) return { canComplete: false, remainingMin: 0, remainingSec: 0 };
+        // Không có in-app booking (scheduled_end_at = null) → cho complete ngay
+        if (!matchData) return { canComplete: false, hasTimer: false, remainingMin: 0, remainingSec: 0 };
+        if (!matchData.scheduled_end_at) return { canComplete: true, hasTimer: false, remainingMin: 0, remainingSec: 0 };
+        // Có in-app booking → đếm ngược đến 15p trước giờ kết thúc
         const endTime = new Date(matchData.scheduled_end_at).getTime();
         const unlockTime = endTime - 15 * 60 * 1000;
         const diff = unlockTime - nowTick;
         return {
             canComplete: diff <= 0,
+            hasTimer: true,
             remainingMin: Math.max(0, Math.floor(diff / 60000)),
             remainingSec: Math.max(0, Math.floor((diff % 60000) / 1000)),
         };
@@ -491,37 +526,29 @@ export default function MatchmakingScreen() {
                             </View>
                         )}
                         
-                        {/* Hoàn Thành */}
-                        {matchData?.scheduled_at ? (
-                            <TouchableOpacity 
-                                onPress={handleCompleteMatch} 
-                                disabled={isLoading || !completeUnlockInfo.canComplete}
-                                className={`w-full py-4 rounded-xl items-center justify-center flex-row gap-2 ${
-                                    (!completeUnlockInfo.canComplete) 
-                                    ? 'bg-emerald-900/40 border border-emerald-800' 
-                                    : 'bg-emerald-600 border border-emerald-500'
-                                }`}
-                            >
-                                {isLoading ? (
-                                    <ActivityIndicator size="small" color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
-                                ) : (
-                                    <>
-                                        <Ionicons name="hardware-chip-outline" size={18} color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
-                                        <Text className={`font-bold text-center px-1 ${!completeUnlockInfo.canComplete ? 'text-slate-400' : 'text-white'}`}>
-                                            {completeUnlockInfo.canComplete 
-                                                ? 'Hoàn Thành Trận Đấu' 
-                                                : `Còn ${String(completeUnlockInfo.remainingMin).padStart(2, '0')}:${String(completeUnlockInfo.remainingSec).padStart(2, '0')} để hoàn thành`}
-                                        </Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        ) : (
-                            <View className="w-full py-4 rounded-xl bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 items-center justify-center flex-col px-2">
-                                <Text className="text-slate-500 font-bold text-center text-[11px] leading-tight" numberOfLines={2}>
-                                    Đợi hoàn tất thanh toán sân...
-                                </Text>
-                            </View>
-                        )}
+                        {/* Hoàn Thành — luôn hiện khi CONFIRMED, timer chỉ hiện nếu có in-app booking */}
+                        <TouchableOpacity 
+                            onPress={handleCompleteMatch} 
+                            disabled={isLoading || !completeUnlockInfo.canComplete}
+                            className={`w-full py-4 rounded-xl items-center justify-center flex-row gap-2 ${
+                                !completeUnlockInfo.canComplete
+                                ? 'bg-emerald-900/40 border border-emerald-800' 
+                                : 'bg-emerald-600 border border-emerald-500'
+                            }`}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator size="small" color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
+                            ) : (
+                                <>
+                                    <Ionicons name="hardware-chip-outline" size={18} color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
+                                    <Text className={`font-bold text-center px-1 ${!completeUnlockInfo.canComplete ? 'text-slate-400' : 'text-white'}`}>
+                                        {completeUnlockInfo.canComplete
+                                            ? 'Hoàn Thành Trận Đấu'
+                                            : `Còn ${String(completeUnlockInfo.remainingMin).padStart(2, '0')}:${String(completeUnlockInfo.remainingSec).padStart(2, '0')} để hoàn thành`}
+                                    </Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
 
                         {/* Vào Chat */}
                         <TouchableOpacity 
