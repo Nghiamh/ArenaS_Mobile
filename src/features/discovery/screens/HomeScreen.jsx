@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
-import { SafeAreaView, ScrollView, Text, TextInput, View, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { ScrollView, Text, TextInput, View, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";

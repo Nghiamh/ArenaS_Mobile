@@ -96,11 +96,12 @@ export default function MatchmakingScreen() {
                         if (match) dispatch(setMatchData(match));
 
                         if (match?.status === "COMPLETED") {
-                            // Trận đã hoàn thành — hiện feedback modal
+                            // Trận đã completed trong DB — clear state, KHÔNG bật feedback modal
+                            // Feedback chỉ xuất hiện khi user bấm nút "Hoàn thành" trong session này
                             clearInterval(pollRef.current);
                             pollRef.current = null;
-                            setCompletedMatchId(match._id || match.id);
-                            setShowFeedbackModal(true);
+                            dispatch(setStatus("IDLE"));
+                            dispatch(setMatchData(null));
                         } else if (match?.status === "CONFIRMED") {
                             dispatch(setStatus("CONFIRMED"));
                             // Fetch pending deposit if confirmed
@@ -148,9 +149,10 @@ export default function MatchmakingScreen() {
                     if (match) dispatch(setMatchData(match));
 
                     if (match?.status === "COMPLETED") {
-                        // Trận đã hoàn thành — hiện feedback modal ngay
-                        setCompletedMatchId(match._id || match.id);
-                        setShowFeedbackModal(true);
+                        // Match đã completed trong DB trước phiên này — clear state, không bật feedback
+                        // Tránh hiển thị modal rating khi user vào lại màn hình hoặc xem lịch sử
+                        dispatch(setStatus("IDLE"));
+                        dispatch(setMatchData(null));
                     } else if (match?.status === "CONFIRMED") {
                         dispatch(setStatus("CONFIRMED"));
                         // Fetch pending deposit if confirmed
@@ -214,9 +216,9 @@ export default function MatchmakingScreen() {
     }, [status, matchData?.scheduled_end_at]);
 
     const completeUnlockInfo = useMemo(() => {
-        // Không có in-app booking (scheduled_end_at = null) → cho complete ngay
         if (!matchData) return { canComplete: false, hasTimer: false, remainingMin: 0, remainingSec: 0 };
-        if (!matchData.scheduled_end_at) return { canComplete: true, hasTimer: false, remainingMin: 0, remainingSec: 0 };
+        // Chưa đặt sân → không cho complete
+        if (!matchData.scheduled_end_at) return { canComplete: false, hasTimer: false, remainingMin: 0, remainingSec: 0 };
         // Có in-app booking → đếm ngược đến 15p trước giờ kết thúc
         const endTime = new Date(matchData.scheduled_end_at).getTime();
         const unlockTime = endTime - 15 * 60 * 1000;
@@ -346,52 +348,66 @@ export default function MatchmakingScreen() {
         const sportName = selectedSport === 'football' ? 'Bóng đá' : selectedSport === 'badminton' ? 'Cầu lông' : selectedSport === 'tennis' ? 'Tennis' : selectedSport === 'pickleball' ? 'Pickleball' : 'Bóng đá';
 
         return (
-            <View className="flex-1 px-6 pt-10 items-center min-h-[500px]">
-                {/* Radar Animation */}
-                <View className="items-center justify-center h-56 relative w-full mb-6">
-                    <Animated.View style={{ transform: [{ scale: scale2 }], opacity: opacity2 }} className="absolute h-32 w-32 rounded-full border border-[#38bdf8]/30" />
-                    <Animated.View style={{ transform: [{ scale: scale1 }], opacity: opacity1 }} className="absolute h-32 w-32 rounded-full border border-[#38bdf8]/60 bg-[#38bdf8]/10" />
-                    
-                    <View className="h-4 w-4 rounded-full bg-[#38bdf8] shadow-md shadow-[#38bdf8]" />
-                    
-                    <View className="absolute w-32 h-32 rounded-full border border-[#38bdf8]/20" />
-                </View>
+            <View className="flex-1 px-5 pt-8 items-center" style={{ minHeight: 500 }}>
 
-                {/* Texts */}
-                <Text className="font-bold text-2xl text-appText text-center mb-2">Đang tìm đối thủ...</Text>
-                <Text className="text-sm text-appText/60 text-center mb-8">Hệ thống đang ghép bạn với người chơi phù hợp</Text>
-
-                {/* Timer */}
-                <View className="flex-row items-center gap-2 bg-appSurface border border-appText/10 px-5 py-2.5 rounded-full mb-8 shadow-sm shadow-black/5">
-                    <Ionicons name="time-outline" size={18} color="#38bdf8" />
-                    <Text className="font-bold text-appText text-base">{formatTime(currentSeconds)} <Text className="font-normal text-appText/50">/ 30:00</Text></Text>
-                </View>
-
-                {/* Details */}
-                <View className="w-full mb-6 px-2">
-                    <View className="flex-row items-center gap-3 mb-3">
-                        <Ionicons name="flash" size={18} color="#38bdf8" />
-                        <Text className="text-sm font-medium text-appText/70">Môn: <Text className="font-bold text-appText">{sportName}</Text></Text>
-                    </View>
-                    <View className="flex-row items-center gap-3">
-                        <Ionicons name="location-outline" size={18} color="#38bdf8" />
-                        <Text className="text-sm font-medium text-appText/70">Sân cụ thể: <Text className="font-bold text-appText">{selectedCourt ? selectedCourt.name : "Đang tìm..."}</Text></Text>
+                {/* Radar pulse */}
+                <View className="items-center justify-center mb-6" style={{ height: 200, width: '100%' }}>
+                    <Animated.View style={{ transform: [{ scale: scale2 }], opacity: opacity2, position: 'absolute' }}
+                        className="h-36 w-36 rounded-full border border-sky-400/25" />
+                    <Animated.View style={{ transform: [{ scale: scale1 }], opacity: opacity1, position: 'absolute' }}
+                        className="h-36 w-36 rounded-full border border-sky-400/50 bg-sky-400/8" />
+                    <View className="h-36 w-36 rounded-full border border-sky-400/15 absolute" />
+                    {/* Center dot */}
+                    <View className="h-16 w-16 rounded-full bg-sky-50 dark:bg-sky-900/40 border-2 border-sky-400/60 items-center justify-center shadow-lg shadow-sky-400/20">
+                        <Ionicons name="search" size={28} color="#38bdf8" />
                     </View>
                 </View>
 
-                {/* Progress bar */}
-                <View className="w-full mb-2 h-1 bg-appText/10 rounded-full overflow-hidden">
-                    <View className="h-full bg-[#38bdf8] rounded-full" style={{ width: `${progressPercent}%` }} />
-                </View>
-                <Text className="text-xs text-appText/50 text-center mb-auto">Hết hạn sau {formatTime(remainingSeconds)}</Text>
+                <Text className="font-black text-2xl text-appText text-center mb-1">Đang tìm đối thủ...</Text>
+                <Text className="text-sm text-appText/50 text-center mb-6">Hệ thống đang ghép bạn với người chơi phù hợp</Text>
 
-                {/* Cancel button */}
-                <TouchableOpacity 
-                    onPress={handleCancelQueue} 
-                    className="w-full py-4 mt-8 mb-6 rounded-xl bg-red-900/10 border border-red-900/30 dark:border-red-900/50 items-center justify-center flex-row gap-2"
-                >
-                    <Ionicons name="close" size={18} color="#F87171" />
-                    <Text className="text-[#F87171] font-bold text-base">Huỷ Tìm Kiếm</Text>
+                {/* Status card */}
+                <View className="w-full bg-appSurface border border-appText/8 rounded-2xl p-4 mb-6 gap-3">
+                    <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center gap-2">
+                            <Ionicons name="time-outline" size={16} color="#38bdf8" />
+                            <Text className="text-sm text-appText/60">Thời gian tìm</Text>
+                        </View>
+                        <Text className="font-black text-sky-500 text-base">{formatTime(currentSeconds)}</Text>
+                    </View>
+                    <View className="h-px bg-appText/8" />
+                    <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center gap-2">
+                            <Ionicons name="flash" size={16} color="#38bdf8" />
+                            <Text className="text-sm text-appText/60">Môn thể thao</Text>
+                        </View>
+                        <Text className="font-bold text-appText text-sm">{sportName}</Text>
+                    </View>
+                    <View className="h-px bg-appText/8" />
+                    <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center gap-2">
+                            <Ionicons name="location-outline" size={16} color="#38bdf8" />
+                            <Text className="text-sm text-appText/60">Sân cụ thể</Text>
+                        </View>
+                        <Text className="font-bold text-appText text-sm" numberOfLines={1} style={{ maxWidth: 160 }}>
+                            {selectedCourt ? selectedCourt.name : 'Bất kỳ sân nào'}
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Progress */}
+                <View className="w-full mb-1">
+                    <View className="h-1.5 bg-appText/8 rounded-full overflow-hidden">
+                        <View className="h-full bg-sky-400 rounded-full" style={{ width: `${progressPercent}%` }} />
+                    </View>
+                    <Text className="text-xs text-appText/40 text-center mt-2">Hết hạn sau {formatTime(remainingSeconds)}</Text>
+                </View>
+
+                {/* Cancel */}
+                <TouchableOpacity onPress={handleCancelQueue}
+                    className="w-full py-3.5 mt-auto mb-4 rounded-2xl border border-red-500/30 bg-red-500/8 items-center justify-center flex-row gap-2">
+                    <Ionicons name="close-circle-outline" size={18} color="#F87171" />
+                    <Text className="text-red-400 font-bold text-sm">Huỷ Tìm Kiếm</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -538,28 +554,54 @@ export default function MatchmakingScreen() {
                             </View>
                         )}
                         
-                        {/* Hoàn Thành — luôn hiện khi CONFIRMED, timer chỉ hiện nếu có in-app booking */}
-                        <TouchableOpacity 
-                            onPress={handleCompleteMatch} 
+
+                        {/* === ACTION BUTTONS === */}
+                        {/* Hoàn thành: chỉ hiện khi có booking, đếm ngược, sáng khi còn 15p */}
+                        <TouchableOpacity
+                            onPress={handleCompleteMatch}
                             disabled={isLoading || !completeUnlockInfo.canComplete}
                             className={`w-full py-4 rounded-xl items-center justify-center flex-row gap-2 ${
-                                !completeUnlockInfo.canComplete
-                                ? 'bg-emerald-900/40 border border-emerald-800' 
-                                : 'bg-emerald-600 border border-emerald-500'
+                                completeUnlockInfo.canComplete
+                                    ? 'bg-emerald-600'
+                                    : 'bg-appSurface border border-appText/15'
                             }`}
+                            style={{ opacity: completeUnlockInfo.canComplete ? 1 : 0.7 }}
                         >
                             {isLoading ? (
-                                <ActivityIndicator size="small" color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
+                                <ActivityIndicator size="small" color={completeUnlockInfo.canComplete ? 'white' : '#94A3B8'} />
                             ) : (
                                 <>
-                                    <Ionicons name="hardware-chip-outline" size={18} color={!completeUnlockInfo.canComplete ? "#94A3B8" : "white"} />
-                                    <Text className={`font-bold text-center px-1 ${!completeUnlockInfo.canComplete ? 'text-slate-400' : 'text-white'}`}>
-                                        {completeUnlockInfo.canComplete
-                                            ? 'Hoàn Thành Trận Đấu'
-                                            : `Còn ${String(completeUnlockInfo.remainingMin).padStart(2, '0')}:${String(completeUnlockInfo.remainingSec).padStart(2, '0')} để hoàn thành`}
+                                    <Ionicons name="checkmark-circle-outline" size={20}
+                                        color={completeUnlockInfo.canComplete ? 'white' : '#64748B'} />
+                                    <Text style={{ color: completeUnlockInfo.canComplete ? 'white' : '#64748B', fontWeight: '700', fontSize: 15 }}>
+                                        {!matchData?.scheduled_end_at
+                                            ? 'Hoàn Thành (chưa đặt sân)'
+                                            : completeUnlockInfo.canComplete
+                                                ? 'Hoàn Thành Trận Đấu'
+                                                : `Còn ${String(completeUnlockInfo.remainingMin).padStart(2,'0')}:${String(completeUnlockInfo.remainingSec).padStart(2,'0')} để hoàn thành`
+                                        }
                                     </Text>
                                 </>
                             )}
+                        </TouchableOpacity>
+
+                        {/* Từ chối: sáng khi chưa đặt sân, mờ khi đã có booking */}
+                        <TouchableOpacity
+                            onPress={handleDecline}
+                            disabled={isLoading || !!matchData?.scheduled_end_at}
+                            className="w-full py-4 rounded-xl items-center justify-center flex-row gap-2 border"
+                            style={{
+                                borderColor: matchData?.scheduled_end_at ? 'rgba(100,116,139,0.2)' : '#FCA5A5',
+                                backgroundColor: matchData?.scheduled_end_at ? 'transparent' : 'rgba(239,68,68,0.08)',
+                                opacity: matchData?.scheduled_end_at ? 0.45 : 1,
+                            }}
+                        >
+                            <Ionicons name="close-circle-outline" size={20}
+                                color={matchData?.scheduled_end_at ? '#64748B' : '#EF4444'} />
+                            <Text style={{
+                                color: matchData?.scheduled_end_at ? '#64748B' : '#EF4444',
+                                fontWeight: '700', fontSize: 15
+                            }}>Hủy Trận</Text>
                         </TouchableOpacity>
 
                         {/* Vào Chat */}
@@ -624,45 +666,98 @@ export default function MatchmakingScreen() {
             {status === "CONFIRMED" && renderMatchCard(true)}
 
             {status === "IDLE" && (
-                <View className="p-6">
-                    <Text className="text-2xl font-bold text-appText mb-2">Tìm đối thủ vừa tầm</Text>
-                    <Text className="text-appText/60 mb-8">Hệ thống sẽ tự động ghép cặp với những người cùng trình độ và khu vực của bạn.</Text>
+                <View className="px-5 pt-6 pb-8">
 
-                    <Text className="font-bold text-appText mb-3">Chọn môn thể thao</Text>
-                    <View className="flex-row flex-wrap gap-3 mb-10">
-                        {[{id:'football', name:'Bóng đá', icon:'soccer'}, {id:'badminton', name:'Cầu lông', icon:'badminton'}, {id:'tennis', name:'Tennis', icon:'tennis'}, {id:'pickleball', name:'Pickleball', icon:'tennis'}].map(s => (
-                            <TouchableOpacity 
-                                key={s.id} 
-                                onPress={() => setSelectedSport(s.id)}
-                                className={`flex-row items-center gap-2 px-4 py-3 rounded-xl border ${selectedSport === s.id ? 'bg-emerald-100 border-emerald-500 dark:bg-emerald-900/30' : 'bg-appSurface border-appText/10'}`}
-                            >
-                                <MaterialCommunityIcons name={s.icon} size={20} color={selectedSport === s.id ? "#059669" : "#64748B"} />
-                                <Text className={`font-semibold ${selectedSport === s.id ? 'text-emerald-700 dark:text-emerald-400' : 'text-appText/70'}`}>{s.name}</Text>
-                            </TouchableOpacity>
-                        ))}
+                    {/* Hero */}
+                    <View className="items-center mb-6">
+                        <View className="h-16 w-16 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 items-center justify-center mb-3 shadow-sm shadow-emerald-900/10">
+                            <Ionicons name="flash" size={34} color="#059669" />
+                        </View>
+                        <Text className="text-2xl font-black text-appText mb-1">Tìm đối thủ</Text>
+                        <Text className="text-sm text-appText/50 text-center px-6">
+                            AI ghép cặp theo trình độ & khu vực của bạn
+                        </Text>
                     </View>
 
-                    <Text className="font-bold text-appText mb-3">Chọn sân (Tùy chọn)</Text>
+                    {/* Sport selector */}
+                    <Text className="text-xs font-black text-appText/40 uppercase tracking-widest mb-3">Môn thể thao</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6" contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+                        {[
+                            { id: 'football',   name: 'Bóng đá',   emoji: '⚽', color: '#16a34a', activeBg: '#dcfce7', activeBorder: '#16a34a' },
+                            { id: 'badminton',  name: 'Cầu lông',  emoji: '🏸', color: '#2563eb', activeBg: '#dbeafe', activeBorder: '#2563eb' },
+                            { id: 'tennis',     name: 'Tennis',    emoji: '🎾', color: '#d97706', activeBg: '#fef3c7', activeBorder: '#d97706' },
+                            { id: 'pickleball', name: 'Pickleball',emoji: '🏓', color: '#7c3aed', activeBg: '#ede9fe', activeBorder: '#7c3aed' },
+                        ].map(s => {
+                            const active = selectedSport === s.id;
+                            return (
+                                <TouchableOpacity
+                                    key={s.id}
+                                    onPress={() => setSelectedSport(s.id)}
+                                    activeOpacity={0.8}
+                                    style={active ? { backgroundColor: s.activeBg, borderColor: s.activeBorder, borderWidth: 1.5 } : {}}
+                                    className={`flex-row items-center gap-2 px-4 py-3 rounded-2xl border ${
+                                        active ? '' : 'bg-appSurface border-appText/10'
+                                    }`}
+                                >
+                                    <Text style={{ fontSize: 18 }}>{s.emoji}</Text>
+                                    <Text style={active ? { color: s.color, fontWeight: '800' } : {}}
+                                        className={active ? 'text-sm' : 'text-sm font-semibold text-appText/70'}>
+                                        {s.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+
+                    {/* Court selector */}
+                    <Text className="text-xs font-black text-appText/40 uppercase tracking-widest mb-3">Sân thi đấu <Text className="text-appText/25 font-normal normal-case tracking-normal">(tuỳ chọn)</Text></Text>
                     {selectedCourt ? (
-                        <View className="flex-row items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-200 mb-8">
+                        <View className="flex-row items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 mb-6">
                             <View className="flex-row items-center gap-3">
-                                <Ionicons name="location" size={24} color="#059669" />
-                                <Text className="font-semibold text-emerald-800 dark:text-emerald-400">{selectedCourt.name}</Text>
+                                <View className="h-9 w-9 rounded-xl bg-emerald-600 items-center justify-center">
+                                    <Ionicons name="location" size={18} color="white" />
+                                </View>
+                                <View>
+                                    <Text className="font-bold text-emerald-800 dark:text-emerald-300 text-sm">{selectedCourt.name}</Text>
+                                    <Text className="text-xs text-emerald-600/60 dark:text-emerald-500">Sân đã chọn</Text>
+                                </View>
                             </View>
-                            <TouchableOpacity onPress={() => setSelectedCourt(null)}>
-                                <Ionicons name="close-circle" size={24} color="#EF4444" />
+                            <TouchableOpacity onPress={() => setSelectedCourt(null)}
+                                className="h-8 w-8 rounded-full bg-red-50 dark:bg-red-900/20 items-center justify-center">
+                                <Ionicons name="close" size={16} color="#EF4444" />
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        <MiniMap sport={selectedSport} onSelectCourt={setSelectedCourt} />
+                        <View className="mb-6 rounded-2xl overflow-hidden border border-appText/8">
+                            <MiniMap sport={selectedSport} onSelectCourt={setSelectedCourt} />
+                        </View>
                     )}
 
-                    <TouchableOpacity 
+                    {/* Tips */}
+                    <View className="flex-row items-start gap-3 bg-blue-50 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-800/60 rounded-2xl p-3.5 mb-6">
+                        <Ionicons name="sparkles-outline" size={16} color="#3b82f6" style={{ marginTop: 1 }} />
+                        <Text className="flex-1 text-xs text-blue-700 dark:text-blue-300 leading-5">
+                            Khai báo <Text className="font-bold">kỹ năng</Text> chính xác để AI ghép đối thủ vừa sức hơn!
+                        </Text>
+                    </View>
+
+                    {/* CTA */}
+                    <TouchableOpacity
                         onPress={handleJoinQueue}
                         disabled={isLoading}
-                        className="w-full py-4 rounded-full bg-emerald-600 shadow-lg shadow-emerald-900/20"
+                        activeOpacity={0.88}
+                        style={{ backgroundColor: '#059669', borderRadius: 18, paddingVertical: 18,
+                            alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10,
+                            shadowColor: '#059669', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+                            elevation: 8, opacity: isLoading ? 0.7 : 1 }}
                     >
-                        {isLoading ? <ActivityIndicator color="white" /> : <Text className="text-center font-bold text-lg text-white">Tìm Trận Ngay</Text>}
+                        {isLoading
+                            ? <ActivityIndicator color="white" />
+                            : <>
+                                <Ionicons name="flash" size={22} color="white" />
+                                <Text style={{ color: 'white', fontWeight: '900', fontSize: 17 }}>Tìm Trận Ngay</Text>
+                              </>
+                        }
                     </TouchableOpacity>
                 </View>
             )}

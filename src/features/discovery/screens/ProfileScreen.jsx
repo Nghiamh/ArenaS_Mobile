@@ -590,17 +590,6 @@ export default function ProfileScreen() {
                                         >
                                             <Text className="text-sm font-bold text-center text-red-600 dark:text-red-400">Hủy đặt sân</Text>
                                         </TouchableOpacity>
-                                    ) : b.displayStatus === "completed" && !b.is_feedback_submitted ? (
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                setFeedbackBooking(b);
-                                                setSelectedBooking(null);
-                                                setFeedbackModalVisible(true);
-                                            }}
-                                            className="w-full rounded-xl bg-amber-500 py-3.5 shadow-md shadow-amber-900/20 mb-3"
-                                        >
-                                            <Text className="text-sm font-bold text-center text-white">⭐ Đánh giá & Nhận XP</Text>
-                                        </TouchableOpacity>
                                     ) : null}
 
                                     <TouchableOpacity
