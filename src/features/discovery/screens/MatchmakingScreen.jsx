@@ -93,7 +93,15 @@ export default function MatchmakingScreen() {
                     const res = await matchmakingApi.getStatus();
                     if (res.data?.status === "MATCHED" || res.data?.status === "CONFIRMED") {
                         const match = res.data?.ticket?.match_id;
-                        if (match?.status === "CONFIRMED") {
+                        if (match) dispatch(setMatchData(match));
+
+                        if (match?.status === "COMPLETED") {
+                            // Trận đã hoàn thành — hiện feedback modal
+                            clearInterval(pollRef.current);
+                            pollRef.current = null;
+                            setCompletedMatchId(match._id || match.id);
+                            setShowFeedbackModal(true);
+                        } else if (match?.status === "CONFIRMED") {
                             dispatch(setStatus("CONFIRMED"));
                             // Fetch pending deposit if confirmed
                             try {
@@ -113,7 +121,6 @@ export default function MatchmakingScreen() {
                         } else {
                             dispatch(setStatus("MATCHED"));
                         }
-                        if (match) dispatch(setMatchData(match));
                     }
                 } catch (err) {
                     // Ignore network errors during polling
@@ -138,7 +145,13 @@ export default function MatchmakingScreen() {
                     dispatch(setStatus("WAITING"));
                 } else if (res.data?.status === "MATCHED" || res.data?.status === "CONFIRMED") {
                     const match = res.data?.ticket?.match_id;
-                    if (match?.status === "CONFIRMED") {
+                    if (match) dispatch(setMatchData(match));
+
+                    if (match?.status === "COMPLETED") {
+                        // Trận đã hoàn thành — hiện feedback modal ngay
+                        setCompletedMatchId(match._id || match.id);
+                        setShowFeedbackModal(true);
+                    } else if (match?.status === "CONFIRMED") {
                         dispatch(setStatus("CONFIRMED"));
                         // Fetch pending deposit if confirmed
                         try {
@@ -154,7 +167,6 @@ export default function MatchmakingScreen() {
                     } else {
                         dispatch(setStatus("MATCHED"));
                     }
-                    if (match) dispatch(setMatchData(match));
                 }
             } catch (err) {
                 // Ignore if no active ticket
