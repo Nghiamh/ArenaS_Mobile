@@ -8,11 +8,23 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://arenas-miby.onrender.com",
+        "EXPO_PUBLIC_MAPBOX_TOKEN": "pk.eyJ1IjoiaG9taW5obmdoaWEiLCJhIjoiY21va2J2ZnIxMDc0cjJwcTQyNmdxcDRpMCJ9.34MmKBKd-JpPQ-F6c3g8Yg",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "430528827641-ov4nm0g6ho97hb80a5mbirte8gqnolmn.apps.googleusercontent.com",
+        "EXPO_PUBLIC_SOCKET_URL": "https://arenas-miby.onrender.com"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://arenas-miby.onrender.com",
+        "EXPO_PUBLIC_MAPBOX_TOKEN": "pk.eyJ1IjoiaG9taW5obmdoaWEiLCJhIjoiY21va2J2ZnIxMDc0cjJwcTQyNmdxcDRpMCJ9.34MmKBKd-JpPQ-F6c3g8Yg",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "430528827641-ov4nm0g6ho97hb80a5mbirte8gqnolmn.apps.googleusercontent.com",
+        "EXPO_PUBLIC_SOCKET_URL": "https://arenas-miby.onrender.com"
       }
     }
   }

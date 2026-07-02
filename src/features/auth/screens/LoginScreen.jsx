@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
     ScrollView,
     Text,
@@ -19,22 +19,6 @@ import { setGuestMode, setCredentials } from "../../../store/slices/authSlice";
 import { setItem } from "../../../utils/storage";
 import { STORAGE_KEYS } from "../../../constants/config";
 import authApi from "../../../api/authApi";
-import * as WebBrowser from "expo-web-browser";
-import {
-    useAuthRequest,
-    makeRedirectUri,
-    ResponseType,
-    exchangeCodeAsync,
-} from "expo-auth-session";
-
-WebBrowser.maybeCompleteAuthSession();
-
-// ── Google OAuth discovery ───────────────────────────────
-const googleDiscovery = {
-    authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenEndpoint: "https://oauth2.googleapis.com/token",
-    revocationEndpoint: "https://oauth2.googleapis.com/revoke",
-};
 
 // ── helpers ──────────────────────────────────────────────
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -70,81 +54,7 @@ export default function LoginScreen() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
-    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-    // ── Google Auth (core expo-auth-session) ─────────────
-    const authConfig = React.useMemo(() => {
-        const uri = makeRedirectUri();
-        return {
-            clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-            redirectUri: uri,
-            scopes: ["openid", "profile", "email"],
-            responseType: ResponseType.Code,
-        };
-    }, []);
-
-    const [googleRequest, googleResponse, promptGoogleAsync] = useAuthRequest(
-        authConfig,
-        googleDiscovery
-    );
-
-    useEffect(() => {
-        if (googleResponse?.type === "success" && googleResponse.params.code) {
-            exchangeCodeAndLogin(googleResponse.params.code);
-        }
-    }, [googleResponse]);
-
-    const exchangeCodeAndLogin = async (code) => {
-        try {
-            setIsGoogleLoading(true);
-            // Exchange authorization code for tokens (client-side at Google)
-            const tokenResult = await exchangeCodeAsync(
-                {
-                    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-                    code,
-                    redirectUri: authConfig.redirectUri,
-                    extraParams: {
-                        code_verifier: googleRequest?.codeVerifier || "",
-                    },
-                },
-                googleDiscovery
-            );
-
-            if (tokenResult.idToken) {
-                // Send idToken to our BE for verification
-                await handleGoogleLogin(tokenResult.idToken);
-            } else {
-                Alert.alert("Lỗi", "Không thể lấy thông tin xác thực từ Google.");
-            }
-        } catch (error) {
-            console.error("Google code exchange error:", error);
-            Alert.alert("Lỗi", "Đăng nhập Google thất bại. Vui lòng thử lại.");
-        } finally {
-            setIsGoogleLoading(false);
-        }
-    };
-
-    const handleGoogleLogin = async (idToken) => {
-        try {
-            setIsGoogleLoading(true);
-            const response = await authApi.googleLogin({ idToken });
-            const { token, user } = response.data;
-
-            if (token) {
-                await setItem(STORAGE_KEYS.authToken, token);
-                await setItem(STORAGE_KEYS.user, JSON.stringify(user));
-                dispatch(setCredentials({ user, token }));
-            }
-        } catch (error) {
-            console.error("Google login error:", error);
-            const errorMessage =
-                error.response?.data?.message ||
-                "Đăng nhập Google thất bại. Vui lòng thử lại.";
-            Alert.alert("Lỗi", errorMessage);
-        } finally {
-            setIsGoogleLoading(false);
-        }
-    };
 
     // ── handlers ─────────────────────────────────────────
     const handleLogin = async () => {
@@ -168,7 +78,7 @@ export default function LoginScreen() {
                 dispatch(setCredentials({ user, token }));
             }
         } catch (error) {
-            console.error("Login error:", error);
+            console.log("Login failed:", error.response?.status, error.response?.data?.message);
             const errorMessage =
                 error.response?.data?.message ||
                 "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.";
@@ -322,45 +232,6 @@ export default function LoginScreen() {
                             )}
                         </TouchableOpacity>
 
-                        {/* ── Divider ── */}
-                        <View className="flex-row items-center mt-6 mb-5">
-                            <View className="flex-1 h-px bg-gray-200" />
-                            <Text className="mx-3 text-[10px] font-bold text-gray-400 uppercase">
-                                Hoặc tiếp tục với
-                            </Text>
-                            <View className="flex-1 h-px bg-gray-200" />
-                        </View>
-
-                        {/* ── Social ── */}
-                        <View className="flex-row gap-3 mb-2">
-                            <TouchableOpacity
-                                onPress={() => promptGoogleAsync()}
-                                disabled={!googleRequest || isGoogleLoading || isLoading}
-                                activeOpacity={0.7}
-                                className={`flex-1 flex-row items-center justify-center rounded-xl border border-gray-200 py-2.5 ${!googleRequest || isGoogleLoading ? "bg-gray-100" : "bg-white"
-                                    }`}
-                            >
-                                {isGoogleLoading ? (
-                                    <ActivityIndicator size="small" color="#4285F4" />
-                                ) : (
-                                    <>
-                                        <Ionicons name="logo-google" size={18} color="#4285F4" />
-                                        <Text className="ml-2 text-[13px] font-bold text-gray-700">
-                                            Google
-                                        </Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                activeOpacity={0.7}
-                                className="flex-1 flex-row items-center justify-center rounded-xl bg-[#1877F2] py-2.5"
-                            >
-                                <Ionicons name="logo-facebook" size={18} color="white" />
-                                <Text className="ml-2 text-[13px] font-bold text-white">
-                                    Facebook
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
                     </View>
 
                     {/* ── Footer ── */}

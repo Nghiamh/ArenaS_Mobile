@@ -49,8 +49,12 @@ function validateRegisterFields({ fullName, email, phone, password, confirmPassw
     // Password
     if (!password) {
         errors.password = "Vui lòng nhập mật khẩu.";
-    } else if (password.length < 6) {
-        errors.password = "Mật khẩu phải có ít nhất 6 ký tự.";
+    } else if (password.length < 8) {
+        errors.password = "Mật khẩu phải có ít nhất 8 ký tự.";
+    } else if (!/[A-Z]/.test(password)) {
+        errors.password = "Mật khẩu phải chứa ít nhất 1 chữ in hoa.";
+    } else if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+        errors.password = "Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.";
     }
 
     // Confirm password
@@ -108,9 +112,11 @@ export default function RegisterScreen() {
 
         try {
             setIsLoading(true);
+            const trimmedEmail = email.trim();
             await authApi.register({
                 name: fullName.trim(),
-                email: email.trim(),
+                email: trimmedEmail,
+                userName: trimmedEmail.split("@")[0] || fullName.trim().replace(/\s+/g, "_"),
                 phone: phone.trim(),
                 password,
             });
@@ -121,7 +127,7 @@ export default function RegisterScreen() {
                 [{ text: "OK", onPress: () => navigation.navigate("Login") }]
             );
         } catch (error) {
-            console.error("Register error:", error);
+            console.log("Register failed:", error.response?.status, error.response?.data?.message);
             const errorMessage =
                 error?.response?.data?.message || "Đăng ký thất bại. Vui lòng kiểm tra lại.";
             Alert.alert("Lỗi", errorMessage);
