@@ -24,7 +24,12 @@ export default function MatchmakingScreen() {
     // Feedback Modal State
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [completedMatchId, setCompletedMatchId] = useState(null);
-    const [feedbackForm, setFeedbackForm] = useState({ rating: 5, comment: "" });
+    const [feedbackForm, setFeedbackForm] = useState({
+        punctual: null,           // true / false
+        attitude: null,           // "friendly" | "neutral" | "bad"
+        skill_as_described: null, // true / false
+        play_again: null,         // true / false
+    });
     const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
     
     // Deposit States
@@ -97,12 +102,12 @@ export default function MatchmakingScreen() {
                         if (match) dispatch(setMatchData(match));
 
                         if (match?.status === "COMPLETED") {
-                            // Trận đã completed trong DB — clear state, KHÔNG bật feedback modal
-                            // Feedback chỉ xuất hiện khi user bấm nút "Hoàn thành" trong session này
                             clearInterval(pollRef.current);
                             pollRef.current = null;
-                            dispatch(setStatus("IDLE"));
-                            dispatch(setMatchData(null));
+                            // Hiện feedback modal nếu chưa mở
+                            const matchId = match._id || match.id;
+                            setCompletedMatchId(matchId);
+                            setShowFeedbackModal(true);
                         } else if (match?.status === "CONFIRMED") {
                             dispatch(setStatus("CONFIRMED"));
                             // Fetch pending deposit if confirmed
@@ -160,8 +165,10 @@ export default function MatchmakingScreen() {
                     if (match) dispatch(setMatchData(match));
 
                     if (match?.status === "COMPLETED") {
-                        dispatch(setStatus("IDLE"));
-                        dispatch(setMatchData(null));
+                        // Hiện feedback modal thay vì về IDLE ngay
+                        const matchId = match._id || match.id;
+                        setCompletedMatchId(matchId);
+                        setShowFeedbackModal(true);
                     } else if (match?.status === "CONFIRMED") {
                         dispatch(setStatus("CONFIRMED"));
                         try {
@@ -462,17 +469,27 @@ export default function MatchmakingScreen() {
     };
 
     const handleSubmitFeedback = async () => {
+        const { punctual, attitude, skill_as_described, play_again } = feedbackForm;
+        if (punctual === null || attitude === null || skill_as_described === null || play_again === null) {
+            Alert.alert("Thiếu thông tin", "Vui lòng trả lời đủ 4 câu hỏi trước khi gửi.");
+            return;
+        }
         if (!completedMatchId) return;
         try {
             setIsSubmittingFeedback(true);
-            await matchmakingApi.submitFeedback(completedMatchId, feedbackForm);
-            Alert.alert("Thành công", "Đánh giá đã được ghi nhận. Điểm ELO của bạn đã được cập nhật!");
+            await matchmakingApi.submitFeedback(completedMatchId, { punctual, attitude, skill_as_described, play_again });
+            Alert.alert("🎉 Cảm ơn!", "Đánh giá đã được ghi nhận. Bạn nhận được +10 XP và +5 điểm!");
         } catch (err) {
-            console.log("Feedback error:", err);
-            Alert.alert("Lỗi", "Không thể gửi đánh giá.");
+            const msg = err.response?.data?.message;
+            if (msg === "already_feedbacked") {
+                Alert.alert("Thông báo", "Bạn đã đánh giá trận này rồi.");
+            } else {
+                Alert.alert("Lỗi", "Không thể gửi đánh giá.");
+            }
         } finally {
             setIsSubmittingFeedback(false);
             setShowFeedbackModal(false);
+            setFeedbackForm({ punctual: null, attitude: null, skill_as_described: null, play_again: null });
             dispatch(setStatus("IDLE"));
             dispatch(setMatchData(null));
         }
@@ -480,6 +497,7 @@ export default function MatchmakingScreen() {
 
     const handleSkipFeedback = () => {
         setShowFeedbackModal(false);
+        setFeedbackForm({ punctual: null, attitude: null, skill_as_described: null, play_again: null });
         dispatch(setStatus("IDLE"));
         dispatch(setMatchData(null));
     };
@@ -533,7 +551,7 @@ export default function MatchmakingScreen() {
                             <View className="flex-row items-center mt-2 bg-blue-50 dark:bg-blue-900/20 self-start px-2 py-1 rounded-md">
                                 <Ionicons name="alarm-outline" size={14} color="#3b82f6" />
                                 <Text className="text-xs font-bold text-blue-600 dark:text-blue-400 ml-1">
-                                    Giờ chơi: {new Date(matchData.scheduled_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})} ngày {new Date(matchData.scheduled_at).toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit', year:'numeric'})}
+                                    Giờ chơi: {new Date(matchData.scheduled_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit', timeZone: 'Asia/Ho_Chi_Minh'})} ngày {new Date(matchData.scheduled_at).toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit', year:'numeric', timeZone: 'Asia/Ho_Chi_Minh'})}
                                 </Text>
                             </View>
                         )}
@@ -803,55 +821,129 @@ export default function MatchmakingScreen() {
 
             {/* Feedback Modal */}
             <Modal visible={showFeedbackModal} transparent animationType="slide" onRequestClose={handleSkipFeedback}>
-                <View className="flex-1 justify-end bg-black/50">
-                    <View className="bg-white dark:bg-appBg rounded-t-3xl p-6">
-                        <View className="flex-row items-center justify-between mb-6">
-                            <Text className="text-xl font-bold text-appText">Đánh giá đối thủ</Text>
-                            <TouchableOpacity onPress={handleSkipFeedback} className="h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-appSurface">
-                                <Ionicons name="close" size={20} color="#64748B" />
+                <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' }}>
+                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 36 }}>
+                        
+                        {/* Handle bar */}
+                        <View style={{ width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
+
+                        {/* Header */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <View>
+                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#111827' }}>Đánh giá đối thủ</Text>
+                                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Đánh giá ẩn danh — được xử lý sau 24h</Text>
+                            </View>
+                            <TouchableOpacity onPress={handleSkipFeedback} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="close" size={18} color="#64748B" />
                             </TouchableOpacity>
                         </View>
 
-                        <Text className="text-sm font-medium text-appText/70 text-center mb-3">
-                            Đối thủ của bạn chơi thế nào? (Thắng/Thua, Thái độ, Kỹ năng)
-                        </Text>
-                        
-                        {/* Stars */}
-                        <View className="flex-row justify-center gap-2 mb-6">
-                            {[1, 2, 3, 4, 5].map(star => (
-                                <TouchableOpacity key={star} onPress={() => setFeedbackForm(p => ({ ...p, rating: star }))}>
-                                    <Ionicons 
-                                        name={star <= feedbackForm.rating ? "star" : "star-outline"} 
-                                        size={40} 
-                                        color={star <= feedbackForm.rating ? "#F59E0B" : "#CBD5E1"} 
-                                    />
-                                </TouchableOpacity>
-                            ))}
+                        {/* Progress bar */}
+                        {(() => {
+                            const answered = [feedbackForm.punctual, feedbackForm.attitude, feedbackForm.skill_as_described, feedbackForm.play_again].filter(v => v !== null).length;
+                            return (
+                                <View style={{ marginBottom: 18 }}>
+                                    <View style={{ height: 4, backgroundColor: '#F1F5F9', borderRadius: 2, overflow: 'hidden' }}>
+                                        <View style={{ height: 4, width: `${(answered / 4) * 100}%`, backgroundColor: '#059669', borderRadius: 2 }} />
+                                    </View>
+                                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>{answered}/4 câu trả lời</Text>
+                                </View>
+                            );
+                        })()}
+
+                        {/* Q1: Punctual */}
+                        <View style={{ marginBottom: 14 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 8 }}>
+                                ⏰ Đối thủ có đến đúng giờ không?
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {[{ label: '✓ Đúng giờ', val: true, active: '#D1FAE5', activeBorder: '#059669', activeText: '#065F46' },
+                                  { label: '✗ Trễ giờ', val: false, active: '#FEE2E2', activeBorder: '#EF4444', activeText: '#991B1B' }].map(opt => {
+                                    const sel = feedbackForm.punctual === opt.val;
+                                    return (
+                                        <TouchableOpacity key={String(opt.val)} onPress={() => setFeedbackForm(p => ({ ...p, punctual: opt.val }))}
+                                            style={{ flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, alignItems: 'center',
+                                                backgroundColor: sel ? opt.active : '#F8FAFC', borderColor: sel ? opt.activeBorder : '#E2E8F0' }}>
+                                            <Text style={{ fontWeight: '700', fontSize: 13, color: sel ? opt.activeText : '#6B7280' }}>{opt.label}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
                         </View>
 
-                        <Text className="text-sm font-semibold text-appText mb-2">Nhận xét thêm (tùy chọn)</Text>
-                        <TextInput
-                            value={feedbackForm.comment}
-                            onChangeText={text => setFeedbackForm(p => ({ ...p, comment: text }))}
-                            placeholder="Tuyệt vời, chơi rất fair-play..."
-                            placeholderTextColor="#94A3B8"
-                            multiline
-                            numberOfLines={3}
-                            textAlignVertical="top"
-                            className="bg-slate-50 dark:bg-appSurface border border-appText/10 rounded-xl p-4 text-appText min-h-[80px] mb-6"
-                        />
+                        {/* Q2: Attitude */}
+                        <View style={{ marginBottom: 14 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 8 }}>
+                                🤝 Thái độ thi đấu của đối thủ?
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {[{ label: '😊 Thân thiện', val: 'friendly', active: '#D1FAE5', activeBorder: '#059669', activeText: '#065F46' },
+                                  { label: '😐 Bình thường', val: 'neutral', active: '#DBEAFE', activeBorder: '#3B82F6', activeText: '#1E40AF' },
+                                  { label: '😠 Tiêu cực', val: 'bad', active: '#FEE2E2', activeBorder: '#EF4444', activeText: '#991B1B' }].map(opt => {
+                                    const sel = feedbackForm.attitude === opt.val;
+                                    return (
+                                        <TouchableOpacity key={opt.val} onPress={() => setFeedbackForm(p => ({ ...p, attitude: opt.val }))}
+                                            style={{ flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, alignItems: 'center',
+                                                backgroundColor: sel ? opt.active : '#F8FAFC', borderColor: sel ? opt.activeBorder : '#E2E8F0' }}>
+                                            <Text style={{ fontWeight: '700', fontSize: 11, color: sel ? opt.activeText : '#6B7280', textAlign: 'center' }}>{opt.label}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
 
-                        <TouchableOpacity 
+                        {/* Q3: Skill as described */}
+                        <View style={{ marginBottom: 14 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 8 }}>
+                                🎯 Kỹ năng có đúng như mô tả không?
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {[{ label: '✓ Đúng', val: true, active: '#D1FAE5', activeBorder: '#059669', activeText: '#065F46' },
+                                  { label: '✗ Không đúng', val: false, active: '#FEE2E2', activeBorder: '#EF4444', activeText: '#991B1B' }].map(opt => {
+                                    const sel = feedbackForm.skill_as_described === opt.val;
+                                    return (
+                                        <TouchableOpacity key={String(opt.val)} onPress={() => setFeedbackForm(p => ({ ...p, skill_as_described: opt.val }))}
+                                            style={{ flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, alignItems: 'center',
+                                                backgroundColor: sel ? opt.active : '#F8FAFC', borderColor: sel ? opt.activeBorder : '#E2E8F0' }}>
+                                            <Text style={{ fontWeight: '700', fontSize: 13, color: sel ? opt.activeText : '#6B7280' }}>{opt.label}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        {/* Q4: Play again */}
+                        <View style={{ marginBottom: 20 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 8 }}>
+                                🔁 Bạn muốn chơi lại với đối thủ này không?
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {[{ label: '👍 Muốn', val: true, active: '#D1FAE5', activeBorder: '#059669', activeText: '#065F46' },
+                                  { label: '👎 Không', val: false, active: '#FEE2E2', activeBorder: '#EF4444', activeText: '#991B1B' }].map(opt => {
+                                    const sel = feedbackForm.play_again === opt.val;
+                                    return (
+                                        <TouchableOpacity key={String(opt.val)} onPress={() => setFeedbackForm(p => ({ ...p, play_again: opt.val }))}
+                                            style={{ flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, alignItems: 'center',
+                                                backgroundColor: sel ? opt.active : '#F8FAFC', borderColor: sel ? opt.activeBorder : '#E2E8F0' }}>
+                                            <Text style={{ fontWeight: '700', fontSize: 13, color: sel ? opt.activeText : '#6B7280' }}>{opt.label}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        {/* Submit */}
+                        <TouchableOpacity
                             onPress={handleSubmitFeedback}
                             disabled={isSubmittingFeedback}
-                            className={`rounded-xl py-4 items-center flex-row justify-center ${isSubmittingFeedback ? 'bg-emerald-600/70' : 'bg-emerald-600'}`}
+                            style={{ backgroundColor: '#059669', borderRadius: 16, paddingVertical: 15, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', opacity: isSubmittingFeedback ? 0.7 : 1 }}
                         >
-                            {isSubmittingFeedback ? <ActivityIndicator size="small" color="white" className="mr-2" /> : null}
-                            <Text className="text-base font-bold text-white">GỬI ĐÁNH GIÁ & NHẬN ĐIỂM</Text>
+                            {isSubmittingFeedback ? <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} /> : null}
+                            <Text style={{ color: 'white', fontWeight: '900', fontSize: 15 }}>GỬI ĐÁNH GIÁ · NHẬN +10 XP</Text>
                         </TouchableOpacity>
-                        
-                        <TouchableOpacity onPress={handleSkipFeedback} className="mt-4 py-2">
-                            <Text className="text-center text-sm font-semibold text-appText/50">Bỏ qua</Text>
+
+                        <TouchableOpacity onPress={handleSkipFeedback} style={{ paddingVertical: 12, alignItems: 'center' }}>
+                            <Text style={{ color: '#9CA3AF', fontSize: 13, fontWeight: '600' }}>Bỏ qua</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

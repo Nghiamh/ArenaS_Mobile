@@ -119,14 +119,16 @@ export default function LoginScreen() {
             </View>
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior="padding"
                 className="flex-1"
+                keyboardVerticalOffset={0}
             >
                 <ScrollView
                     className="flex-1"
-                    contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 48, justifyContent: "center" }}
+                    contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 48, paddingTop: 40 }}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
+                    automaticallyAdjustKeyboardInsets={true}
                 >
                     {/* Logo & title */}
                     <View className="items-center mb-8">
@@ -177,7 +179,7 @@ export default function LoginScreen() {
                                 <Text className="text-[10px] font-bold text-gray-500 uppercase">
                                     Mật khẩu
                                 </Text>
-                                <TouchableOpacity>
+                                <TouchableOpacity onPress={() => navigation.navigate("ForgotPassword")}>
                                     <Text className="text-[10px] font-bold text-[#007F3F] uppercase">
                                         Quên mật khẩu?
                                     </Text>

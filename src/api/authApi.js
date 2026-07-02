@@ -7,6 +7,9 @@ const authApi = {
     register: (data) => {
         return axiosClient.post("/api/auth/register", data);
     },
+    forgotPassword: (data) => {
+        return axiosClient.post("/api/auth/forgot-password", data);
+    },
     getProfile: () => {
         return axiosClient.get("/api/profile/me");
     },
