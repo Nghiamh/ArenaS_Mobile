@@ -92,6 +92,9 @@ export default function ChatScreen({ navigation, route }) {
 
             // Listen for court booked confirmation
             socket.on("court_booked", handleCourtBooked);
+
+            // Listen for court cancellation — clear deposit banner instantly
+            socket.on("court_cancelled", handleCourtCancelled);
         };
 
         connectSocket();
@@ -104,6 +107,7 @@ export default function ChatScreen({ navigation, route }) {
                 socketRef.current.off("chat_vote_updated", handleChatVoteUpdated);
                 socketRef.current.off("opponent_deposit_required", handleOpponentDeposit);
                 socketRef.current.off("court_booked", handleCourtBooked);
+                socketRef.current.off("court_cancelled", handleCourtCancelled);
             }
         };
     }, [matchId]);
@@ -147,6 +151,13 @@ export default function ChatScreen({ navigation, route }) {
     const handleCourtBooked = useCallback((data) => {
         if (data.matchId === matchId && data.status === "confirmed") {
             // Deposit completed, clear banner
+            setPendingDeposit(null);
+        }
+    }, [matchId]);
+
+    const handleCourtCancelled = useCallback((data) => {
+        if (data.matchId === matchId) {
+            // Court was cancelled — clear deposit banner immediately
             setPendingDeposit(null);
         }
     }, [matchId]);

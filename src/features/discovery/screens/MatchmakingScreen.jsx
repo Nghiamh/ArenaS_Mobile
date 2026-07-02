@@ -8,6 +8,7 @@ import bookingApi from "../../../api/bookingApi";
 import { setStatus, setMatchData } from "../../../store/slices/matchmakingSlice";
 import MiniMap from "../../../components/MiniMap";
 import ReportModal from "./ReportModal";
+import { getSocket } from "../../../utils/socket";
 
 export default function MatchmakingScreen() {
     const navigation = useNavigation();
@@ -146,6 +147,37 @@ export default function MatchmakingScreen() {
             pollRef.current = null;
         };
     }, [status, dispatch]);
+
+    // Socket listener: clear deposit banner and timer instantly when court is cancelled
+    useEffect(() => {
+        if (!matchData) return;
+        const matchId = matchData._id || matchData.id;
+        if (!matchId) return;
+
+        let socket;
+        let mounted = true;
+        getSocket().then((s) => {
+            if (!s || !mounted) return;
+            socket = s;
+            socket.on("court_cancelled", (data) => {
+                if (data.matchId === matchId) {
+                    // Clear deposit countdown
+                    setOpponentDeposit(null);
+                    setDepositCountdown(0);
+                    // Clear scheduled_end_at so complete-match timer stops
+                    dispatch(setMatchData({
+                        ...matchData,
+                        scheduled_at: null,
+                        scheduled_end_at: null,
+                    }));
+                }
+            });
+        });
+        return () => {
+            mounted = false;
+            if (socket) socket.off("court_cancelled");
+        };
+    }, [matchData, dispatch]);
 
     // Kiểm tra trạng thái khi user đã load xong (fix: auth race condition)
     useEffect(() => {
