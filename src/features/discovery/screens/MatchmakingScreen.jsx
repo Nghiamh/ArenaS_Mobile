@@ -97,20 +97,20 @@ export default function MatchmakingScreen() {
             pollRef.current = setInterval(async () => {
                 try {
                     const res = await matchmakingApi.getStatus();
-                    if (res.data?.status === "MATCHED" || res.data?.status === "CONFIRMED") {
+                    const serverStatus = res.data?.status;
+
+                    if (serverStatus === "MATCHED" || serverStatus === "CONFIRMED") {
                         const match = res.data?.ticket?.match_id;
                         if (match) dispatch(setMatchData(match));
 
                         if (match?.status === "COMPLETED") {
                             clearInterval(pollRef.current);
                             pollRef.current = null;
-                            // Hiện feedback modal nếu chưa mở
                             const matchId = match._id || match.id;
                             setCompletedMatchId(matchId);
                             setShowFeedbackModal(true);
                         } else if (match?.status === "CONFIRMED") {
                             dispatch(setStatus("CONFIRMED"));
-                            // Fetch pending deposit if confirmed
                             try {
                                 const depRes = await bookingApi.getMatchPendingDeposit(match._id || match.id);
                                 if (depRes.data?.pending_deposit) {
@@ -122,12 +122,16 @@ export default function MatchmakingScreen() {
                                 } else {
                                     setOpponentDeposit(null);
                                 }
-                            } catch (e) {
-                                // Ignore deposit fetch error
-                            }
+                            } catch (e) {}
                         } else {
                             dispatch(setStatus("MATCHED"));
                         }
+                    } else {
+                        // Server trả về IDLE hoặc không có ticket → reset về IDLE
+                        clearInterval(pollRef.current);
+                        pollRef.current = null;
+                        dispatch(setStatus("IDLE"));
+                        dispatch(setMatchData(null));
                     }
                 } catch (err) {
                     // Ignore network errors during polling
@@ -158,14 +162,14 @@ export default function MatchmakingScreen() {
             try {
                 const res = await matchmakingApi.getStatus();
                 if (cancelled) return;
-                if (res.data?.status === "WAITING") {
+                const serverStatus = res.data?.status;
+                if (serverStatus === "WAITING") {
                     dispatch(setStatus("WAITING"));
-                } else if (res.data?.status === "MATCHED" || res.data?.status === "CONFIRMED") {
+                } else if (serverStatus === "MATCHED" || serverStatus === "CONFIRMED") {
                     const match = res.data?.ticket?.match_id;
                     if (match) dispatch(setMatchData(match));
 
                     if (match?.status === "COMPLETED") {
-                        // Hiện feedback modal thay vì về IDLE ngay
                         const matchId = match._id || match.id;
                         setCompletedMatchId(matchId);
                         setShowFeedbackModal(true);
@@ -184,6 +188,10 @@ export default function MatchmakingScreen() {
                     } else {
                         dispatch(setStatus("MATCHED"));
                     }
+                } else {
+                    // Server trả về IDLE hoặc không có ticket (DB bị xóa, match bị cancel) → về IDLE
+                    dispatch(setStatus("IDLE"));
+                    dispatch(setMatchData(null));
                 }
             } catch (err) {
                 // Ignore: 401 khi chưa auth, hoặc không có ticket
