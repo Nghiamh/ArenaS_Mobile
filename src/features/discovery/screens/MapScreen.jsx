@@ -22,7 +22,7 @@ export default function MapScreen() {
     // Mặc định TPHCM nếu không có
     const lat = latitude || 10.762622;
     const lng = longitude || 106.660172;
-    const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+    const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "";
 
     /**
      * Helper: lấy vị trí GPS với timeout 5s, fallback về HCM
@@ -277,7 +277,7 @@ export default function MapScreen() {
                 </div>
             </div>
             <script>
-                mapboxgl.accessToken = '${mapboxToken}';
+                mapboxgl.accessToken = '${process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? mapboxToken}';
                 
                 let centerLng = ${lng};
                 let centerLat = ${lat};
