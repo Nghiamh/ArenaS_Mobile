@@ -9,13 +9,25 @@ import { setStatus, setMatchData } from "../../../store/slices/matchmakingSlice"
 import MiniMap from "../../../components/MiniMap";
 import ReportModal from "./ReportModal";
 import { getSocket } from "../../../utils/socket";
+import LoginRequiredScreen from "../../../components/LoginRequiredScreen";
 
 export default function MatchmakingScreen() {
     const navigation = useNavigation();
     const route = useRoute();
     const dispatch = useDispatch();
-    const user = useSelector(state => state.auth.user);
+    const { user, isGuest } = useSelector(state => state.auth);
     const { status, matchData } = useSelector(state => state.matchmaking);
+
+    // ── Guest guard ───────────────────────────────────────
+    if (isGuest) {
+        return (
+            <LoginRequiredScreen
+                icon="flash-outline"
+                title="Đăng nhập để ghép kèo"
+                description="Tính năng tìm đối thủ chỉ dành cho thành viên đã đăng nhập. Hãy đăng nhập để bắt đầu!"
+            />
+        );
+    }
     const [isLoading, setIsLoading] = useState(false);
     const [selectedSport, setSelectedSport] = useState("football");
     const [selectedCourt, setSelectedCourt] = useState(null);

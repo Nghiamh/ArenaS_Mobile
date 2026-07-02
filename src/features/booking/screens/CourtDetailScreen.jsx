@@ -6,9 +6,13 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCourtById } from "../../../store/slices/venueSlice";
 import { setCheckoutDraft } from "../../../store/slices/bookingSlice";
+import { logout } from "../../../store/slices/authSlice";
 import bookingApi from "../../../api/bookingApi";
 import reviewApi from "../../../api/reviewApi";
 import { getSportNameVI, getCourtSport, formatPrice } from "../../../utils/courtHelpers";
+import { removeItem } from "../../../utils/storage";
+import { STORAGE_KEYS } from "../../../constants/config";
+import LoginRequiredScreen from "../../../components/LoginRequiredScreen";
 
 const { width } = Dimensions.get("window");
 
@@ -62,7 +66,9 @@ export default function CourtDetailScreen() {
     const matchId = route.params?.matchId || null;
     const { selectedVenue: court, status, error } = useSelector((state) => state.venue);
     const isLoading = status === "loading";
-    const { user } = useSelector(state => state.auth);
+    const { user, isGuest } = useSelector(state => state.auth);
+
+    // ── Guest guard (xem sân OK, nhưng không đặt được) — check sớm nếu muốn chặn toàn bộ không cho xâm nhập ở dưới
 
     // Review states
     const [reviews, setReviews] = useState([]);
@@ -784,18 +790,34 @@ export default function CourtDetailScreen() {
                             </Text>
                         </Text>
                     </View>
-                    <TouchableOpacity
-                        onPress={handleBookNow}
-                        className={`rounded-xl px-8 py-3.5 shadow-md flex-row items-center gap-2 ${selectedSlotIndices.length > 0 && !isLocking
-                            ? matchId ? 'bg-amber-500 shadow-amber-900/20' : 'bg-emerald-600 shadow-emerald-900/20'
-                            : 'bg-appText/20'}`}
-                        disabled={selectedSlotIndices.length === 0 || isLocking}
-                    >
-                        {isLocking ? <ActivityIndicator size="small" color="white" /> : null}
-                        <Text className="text-sm font-bold text-white text-center">
-                            {isLocking ? "Đang giữ chỗ..." : matchId ? "Đặt cọc " : "Đặt sân ngay"}
-                        </Text>
-                    </TouchableOpacity>
+
+                    {/* ── Guest: show login button instead of booking button ── */}
+                    {isGuest ? (
+                        <TouchableOpacity
+                            onPress={async () => {
+                                await removeItem(STORAGE_KEYS.guestMode);
+                                dispatch(logout());
+                            }}
+                            activeOpacity={0.85}
+                            className="rounded-xl px-6 py-3.5 shadow-md flex-row items-center gap-2 bg-emerald-600 shadow-emerald-900/20"
+                        >
+                            <Ionicons name="log-in-outline" size={18} color="white" />
+                            <Text className="text-sm font-bold text-white">Đăng nhập để đặt</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            onPress={handleBookNow}
+                            className={`rounded-xl px-8 py-3.5 shadow-md flex-row items-center gap-2 ${selectedSlotIndices.length > 0 && !isLocking
+                                ? matchId ? 'bg-amber-500 shadow-amber-900/20' : 'bg-emerald-600 shadow-emerald-900/20'
+                                : 'bg-appText/20'}`}
+                            disabled={selectedSlotIndices.length === 0 || isLocking}
+                        >
+                            {isLocking ? <ActivityIndicator size="small" color="white" /> : null}
+                            <Text className="text-sm font-bold text-white text-center">
+                                {isLocking ? "Đang giữ chỗ..." : matchId ? "Đặt cọc " : "Đặt sân ngay"}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
         </View>
