@@ -786,12 +786,10 @@ export default function CourtDetailScreen() {
                             {selectedSlotIndices.length > 0 ? `${selectedSlotIndices.length} slot đã chọn` : `Giờ hoạt động: ${court.open_time || "06:00"} - ${court.close_time || "22:00"}`}
                         </Text>
                         <Text className="mt-1 text-xs font-medium text-appText/60">
-                            {matchId ? 'Bạn cọc: ' : 'Giá: '}<Text className="text-sm font-bold text-emerald-600">
+                            {'Giá: '}<Text className="text-sm font-bold text-emerald-600">
                                 {selectedSlotIndices.length > 0
-                                    ? formatPrice(matchId
-                                        ? Math.ceil((court.price_per_hour || 0) / 2 * selectedSlotIndices.length / 2)
-                                        : (court.price_per_hour || 0) / 2 * selectedSlotIndices.length)
-                                    : formatPrice(minPrice) + "/h"}
+                                    ? formatPrice((court.price_per_hour || 0) / 2 * selectedSlotIndices.length)
+                                    : formatPrice(court.price_per_hour || minPrice) + "/h"}
                             </Text>
                         </Text>
                     </View>

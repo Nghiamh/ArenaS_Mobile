@@ -26,7 +26,6 @@ function BottomTabs() {
 
     return (
         <Tab.Navigator
-            detachInactiveScreens={false}
             screenOptions={({ route }) => ({
                 headerShown: false,
                 headerStyle: { backgroundColor: isDark ? "#08101F" : "#F5F7FA" },
@@ -67,7 +66,6 @@ export default function MainTab() {
     return (
         <Stack.Navigator 
             screenOptions={{ headerShown: false }}
-            detachInactiveScreens={false}
         >
             <Stack.Screen name="BottomTabs" component={BottomTabs} />
             

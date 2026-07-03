@@ -48,7 +48,7 @@ export default function WalletScreen() {
             setDepositAmount("");
         }
         return () => clearInterval(interval);
-    }, [showDepositModal, depositCode, balance]);
+    }, [showDepositModal, depositCode]);
 
     const fetchWalletData = async (isSilent = false) => {
         try {

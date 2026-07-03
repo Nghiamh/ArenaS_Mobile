@@ -41,12 +41,17 @@ export default function ProfileScreen() {
     useFocusEffect(
         React.useCallback(() => {
             if (!isGuest && user?.id !== "guest") {
-                setIsLoading(true);
+                // Lần đầu load (chưa có data): hiện spinner
+                // Quay lại từ màn hình khác (đã có data): refresh ngầm, không flash
+                const isFirstLoad = bookings.length === 0;
+
+                if (isFirstLoad) setIsLoading(true);
                 dispatch(fetchUserProfile()).finally(() => setIsLoading(false));
-                setIsLoadingBookings(true);
+
+                if (isFirstLoad) setIsLoadingBookings(true);
                 bookingApi.getMyBookings()
                     .then(res => setBookings(res.data?.bookings || res.data || []))
-                    .catch(() => setBookings([]))
+                    .catch(() => {})
                     .finally(() => setIsLoadingBookings(false));
             }
         }, [dispatch, isGuest])
@@ -486,7 +491,22 @@ export default function ProfileScreen() {
                                             <Ionicons name="time-outline" size={14} color="#059669" />
                                             <Text className="text-xs text-appText/60">{b.start_time || b.startTime} - {b.end_time || b.endTime}</Text>
                                         </View>
-                                        <Text className="text-sm font-bold text-emerald-600">{formatPrice(b.total_price || b.totalPrice)}</Text>
+                                        <View className="items-end">
+                                            {(() => {
+                                                // Match booking: lấy số tiền user này thực sự đã trả
+                                                const myParticipant = b.participants?.find(
+                                                    p => p.userId === user?.id || p.userId === user?._id ||
+                                                         p.userId?.toString() === (user?.id || user?._id)?.toString()
+                                                );
+                                                const chargedAmount = myParticipant
+                                                    ? myParticipant.amount
+                                                    : Math.max(0, (b.total_price || b.totalPrice || 0) - (b.voucher_discount || 0));
+
+                                                return (
+                                                    <Text className="text-sm font-bold text-emerald-600">{formatPrice(chargedAmount)}</Text>
+                                                );
+                                            })()}
+                                        </View>
                                     </View>
                                 </TouchableOpacity>
                             );
@@ -577,11 +597,30 @@ export default function ProfileScreen() {
                                                     <Text className="text-sm font-semibold text-emerald-600">{b.voucher_code}</Text>
                                                 </View>
                                             ) : null}
+                                            {b.voucher_discount > 0 ? (
+                                                <View className="flex-row justify-between">
+                                                    <Text className="text-sm text-emerald-600">Giảm giá</Text>
+                                                    <Text className="text-sm font-semibold text-emerald-600">-{formatPrice(b.voucher_discount)}</Text>
+                                                </View>
+                                            ) : null}
                                             <View className="h-px bg-appText/5 my-1" />
-                                            <View className="flex-row justify-between">
-                                                <Text className="text-sm font-bold text-appText">Tổng tiền</Text>
-                                                <Text className="text-base font-bold text-emerald-600">{formatPrice(b.total_price || b.totalPrice)}</Text>
-                                            </View>
+                                            {b.voucher_discount > 0 ? (
+                                                <>
+                                                    <View className="flex-row justify-between">
+                                                        <Text className="text-sm text-appText/60">Giá gốc</Text>
+                                                        <Text className="text-sm font-semibold text-appText/40 line-through">{formatPrice(b.total_price || b.totalPrice)}</Text>
+                                                    </View>
+                                                    <View className="flex-row justify-between">
+                                                        <Text className="text-sm font-bold text-appText">Bạn đã trả</Text>
+                                                        <Text className="text-base font-bold text-emerald-600">{formatPrice((b.total_price || b.totalPrice) - b.voucher_discount)}</Text>
+                                                    </View>
+                                                </>
+                                            ) : (
+                                                <View className="flex-row justify-between">
+                                                    <Text className="text-sm font-bold text-appText">Tổng tiền</Text>
+                                                    <Text className="text-base font-bold text-emerald-600">{formatPrice(b.total_price || b.totalPrice)}</Text>
+                                                </View>
+                                            )}
                                         </View>
                                     </View>
 

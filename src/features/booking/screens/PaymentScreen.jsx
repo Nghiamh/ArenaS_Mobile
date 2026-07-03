@@ -254,13 +254,23 @@ export default function PaymentScreen() {
                         </View>
                         <View className="flex-row justify-between">
                             <Text className="text-sm text-appText/60">Giá sân</Text>
-                            <Text className="text-sm font-bold text-appText">{formatPrice(checkoutDraft.totalPrice)}</Text>
+                            {appliedVoucher ? (
+                                <Text className="text-sm font-bold text-appText/40 line-through">{formatPrice(checkoutDraft.totalPrice)}</Text>
+                            ) : (
+                                <Text className="text-sm font-bold text-appText">{formatPrice(checkoutDraft.totalPrice)}</Text>
+                            )}
                         </View>
                         {appliedVoucher ? (
-                            <View className="flex-row justify-between">
-                                <Text className="text-sm text-emerald-600">Giảm giá ({appliedVoucher.voucher?.code})</Text>
-                                <Text className="text-sm font-bold text-emerald-600">-{formatPrice(discountAmount)}</Text>
-                            </View>
+                            <>
+                                <View className="flex-row justify-between">
+                                    <Text className="text-sm text-emerald-600">Giảm giá ({appliedVoucher.voucher?.code})</Text>
+                                    <Text className="text-sm font-bold text-emerald-600">-{formatPrice(discountAmount)}</Text>
+                                </View>
+                                <View className="flex-row justify-between">
+                                    <Text className="text-sm font-semibold text-appText">Sau giảm</Text>
+                                    <Text className="text-sm font-bold text-emerald-600">{formatPrice(finalAmount)}</Text>
+                                </View>
+                            </>
                         ) : null}
                         <View className="h-px bg-appText/10 my-1" />
                         {isMatchBooking ? (
@@ -466,7 +476,21 @@ export default function PaymentScreen() {
                                         return (
                                             <TouchableOpacity
                                                 key={v._id || v.code}
-                                                onPress={() => handleValidateVoucher(v.code)}
+                                                onPress={async () => {
+                                                        // Points voucher: phải redeem trước rồi mới validate
+                                                        if (needsPoints && !v.isUsedByMe) {
+                                                            try {
+                                                                await voucherApi.redeem(v._id);
+                                                                // Đổi điểm thành công, giờ validate
+                                                                await handleValidateVoucher(v.code);
+                                                            } catch (err) {
+                                                                const msg = err.response?.data?.message || 'Không thể đổi voucher này';
+                                                                showModal({ type: 'error', title: 'Lỗi', message: msg });
+                                                            }
+                                                        } else {
+                                                            handleValidateVoucher(v.code);
+                                                        }
+                                                    }}
                                                 disabled={isGrayedOut}
                                                 className={`flex-row items-center rounded-2xl bg-appSurface border p-4 gap-3 ${isGrayedOut ? 'opacity-40 border-appText/5' : 'border-appText/5'}`}
                                             >
