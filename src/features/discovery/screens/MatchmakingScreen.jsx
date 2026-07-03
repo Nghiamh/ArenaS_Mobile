@@ -112,7 +112,9 @@ export default function MatchmakingScreen() {
                     const res = await matchmakingApi.getStatus();
                     const serverStatus = res.data?.status;
 
-                    if (serverStatus === "MATCHED" || serverStatus === "CONFIRMED") {
+                    if (serverStatus === "WAITING") {
+                        // Vẫn đang tìm → tiếp tục poll, không làm gì thêm
+                    } else if (serverStatus === "MATCHED" || serverStatus === "CONFIRMED") {
                         const match = res.data?.ticket?.match_id;
                         if (match) dispatch(setMatchData(match));
 
@@ -140,7 +142,7 @@ export default function MatchmakingScreen() {
                             dispatch(setStatus("MATCHED"));
                         }
                     } else {
-                        // Server trả về IDLE hoặc không có ticket → reset về IDLE
+                        // Server trả về IDLE hoặc không có ticket (bị cancel/hết hạn) → reset về IDLE
                         clearInterval(pollRef.current);
                         pollRef.current = null;
                         dispatch(setStatus("IDLE"));
