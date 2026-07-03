@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Image, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput, Image, ActivityIndicator } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
 import walletApi from "../../../api/walletApi";
 
 export default function WalletScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const navigation = useNavigation();
@@ -57,10 +59,11 @@ export default function WalletScreen() {
                 
                 // Nếu đang mở modal nạp tiền, có mã và số dư tăng lên -> Báo thành công và đóng modal
                 if (showDepositModal && depositCode && initialBalance !== null && newBalance > initialBalance) {
-                    Alert.alert(
-                        "Nạp tiền thành công! 🎉", 
-                        `Hệ thống đã nhận được +${formatCurrency(newBalance - initialBalance)} vào ví của bạn.`
-                    );
+                    showModal({
+                        type: "success",
+                        title: "Nạp tiền thành công!",
+                        message: `Hệ thống đã nhận được +${formatCurrency(newBalance - initialBalance)} vào ví của bạn.`,
+                    });
                     setShowDepositModal(false);
                 }
                 
@@ -69,7 +72,7 @@ export default function WalletScreen() {
             }
         } catch (error) {
             console.error("Failed to fetch wallet:", error);
-            if (!isSilent) Alert.alert("Lỗi", "Không thể tải thông tin ví");
+            if (!isSilent) showModal({ type: "error", title: "Lỗi", message: "Không thể tải thông tin ví" });
         } finally {
             if (!isSilent) setIsLoading(false);
         }
@@ -86,7 +89,7 @@ export default function WalletScreen() {
                 setServerQrUrl(response.data.qrUrl);
             }
         } catch (error) {
-            Alert.alert("Lỗi", "Không thể tạo mã nạp tiền. Vui lòng thử lại sau.");
+            showModal({ type: "error", title: "Lỗi", message: "Không thể tạo mã nạp tiền. Vui lòng thử lại sau." });
             console.error("Create deposit error:", error);
         } finally {
             setIsGeneratingQR(false);
@@ -303,6 +306,7 @@ export default function WalletScreen() {
                     </View>
                 </View>
             </Modal>
+            <ModalComponent />
         </View>
     );
 }

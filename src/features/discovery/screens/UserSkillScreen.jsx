@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Modal, TextInput } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import userSkillApi from "../../../api/userSkillApi";
@@ -107,6 +108,7 @@ function SkillCard({ skill, onPress, onDelete }) {
 }
 
 export default function UserSkillScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const navigation = useNavigation();
@@ -170,20 +172,25 @@ export default function UserSkillScreen() {
             setIsModalVisible(false);
             fetchSkills();
         } catch (e) {
-            Alert.alert("Lỗi", e.response?.data?.message || e.message);
+            showModal({ type: "error", title: "Lỗi", message: e.response?.data?.message || e.message });
         } finally { setIsSaving(false); }
     };
 
     const handleDelete = (skillId) => {
-        Alert.alert("Xóa kỹ năng", "Bạn chắc chắn muốn xóa kỹ năng này?", [
-            { text: "Hủy", style: "cancel" },
-            {
-                text: "Xóa", style: "destructive", onPress: async () => {
-                    try { await userSkillApi.deleteCurrentUserSkill(skillId); fetchSkills(); }
-                    catch (_) { Alert.alert("Lỗi", "Không thể xóa kỹ năng"); }
+        showModal({
+            type: "confirm",
+            title: "Xóa kỹ năng",
+            message: "Bạn chắc chắn muốn xóa kỹ năng này?",
+            buttons: [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Xóa", style: "destructive", onPress: async () => {
+                        try { await userSkillApi.deleteCurrentUserSkill(skillId); fetchSkills(); }
+                        catch (_) { showModal({ type: "error", title: "Lỗi", message: "Không thể xóa kỹ năng" }); }
+                    }
                 }
-            }
-        ]);
+            ],
+        });
     };
 
     const currentLevelInfo = getLevelInfo(level);
@@ -439,7 +446,8 @@ export default function UserSkillScreen() {
                 </View>
             </View>
         </View>
-    </Modal>
+        </Modal>
+        <ModalComponent />
         </View>
     );
 }

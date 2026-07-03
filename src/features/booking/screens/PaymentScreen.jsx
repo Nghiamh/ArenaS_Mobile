@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, Modal } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, TextInput, Modal } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
@@ -10,6 +11,7 @@ import voucherApi from "../../../api/voucherApi";
 import { resetBooking } from "../../../store/slices/bookingSlice";
 
 export default function PaymentScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const navigation = useNavigation();
@@ -63,7 +65,11 @@ export default function PaymentScreen() {
                         const newBalance = res.data?.balance ?? res.data?.wallet?.balance ?? 0;
                         setWalletBalance(newBalance);
                         if (initialBalance !== null && newBalance > initialBalance) {
-                            Alert.alert("Nạp tiền thành công! 🎉", `Đã nhận +${(newBalance - initialBalance).toLocaleString("vi-VN")}đ`);
+                            showModal({
+                                type: "success",
+                                title: "Nạp tiền thành công!",
+                                message: `Đã nhận +${(newBalance - initialBalance).toLocaleString("vi-VN")}đ vào ví.`,
+                            });
                             setShowDepositModal(false);
                         }
                     }
@@ -123,7 +129,7 @@ export default function PaymentScreen() {
             setShowVoucherModal(false);
         } catch (err) {
             const msg = err.response?.data?.message || "Mã voucher không hợp lệ";
-            Alert.alert("Lỗi", msg);
+            showModal({ type: "error", title: "Voucher không hợp lệ", message: msg });
             setAppliedVoucher(null);
         } finally {
             setIsValidating(false);
@@ -160,12 +166,13 @@ export default function PaymentScreen() {
                 ...(isMatchBooking ? { match_id: checkoutDraft.matchId, payment_type: matchPaymentMode } : {}),
             };
             await bookingApi.userBookCourt(data);
-            Alert.alert(
-                isMatchBooking && matchPaymentMode === 'split' ? "Đặt cọc thành công!" : "Đặt sân thành công!",
-                isMatchBooking && matchPaymentMode === 'split'
+            showModal({
+                type: "success",
+                title: isMatchBooking && matchPaymentMode === 'split' ? "Đặt cọc thành công!" : "Đặt sân thành công!",
+                message: isMatchBooking && matchPaymentMode === 'split'
                     ? "Bạn đã thanh toán 50%. Đợi đối thủ hoàn tất."
                     : "Tiền đã được trừ từ ví của bạn.",
-                [
+                buttons: [
                     {
                         text: isMatchBooking ? "Về trang ghép kèo" : "Về trang chủ",
                         onPress: () => {
@@ -177,11 +184,11 @@ export default function PaymentScreen() {
                             }
                         }
                     }
-                ]
-            );
+                ],
+            });
         } catch (error) {
             const errorMessage = error.response?.data?.error || error.response?.data?.message || "Có lỗi xảy ra khi đặt sân.";
-            Alert.alert("Lỗi", errorMessage);
+            showModal({ type: "error", title: "Lỗi thanh toán", message: errorMessage });
         } finally {
             setIsBooking(false);
         }
@@ -198,7 +205,7 @@ export default function PaymentScreen() {
                 setServerQrUrl(response.data.qrUrl);
             }
         } catch (error) {
-            Alert.alert("Lỗi", "Không thể tạo mã nạp tiền. Vui lòng thử lại sau.");
+            showModal({ type: "error", title: "Lỗi", message: "Không thể tạo mã nạp tiền. Vui lòng thử lại sau." });
         } finally {
             setIsGeneratingQR(false);
         }
@@ -570,6 +577,7 @@ export default function PaymentScreen() {
                     </View>
                 </View>
             </Modal>
+            <ModalComponent />
         </View>
     );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Dimensions, ActivityIndicator, Modal, FlatList, TextInput } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, Modal, FlatList, TextInput } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -44,6 +45,7 @@ function formatLocalYYYYMMDD(dateObj) {
 }
 
 export default function CourtDetailScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const iconColor = isDark ? "#FFFFFF" : "#000000";
@@ -108,7 +110,7 @@ export default function CourtDetailScreen() {
     // Handle submit review
     const handleSubmitReview = async () => {
         if (reviewForm.rating < 1 || reviewForm.rating > 5) {
-            return Alert.alert("Lỗi", "Vui lòng chọn số sao từ 1 đến 5");
+            return showModal({ type: "warning", title: "Lỗi", message: "Vui lòng chọn số sao từ 1 đến 5" });
         }
         try {
             setIsSubmittingReview(true);
@@ -116,20 +118,20 @@ export default function CourtDetailScreen() {
                 // Update
                 const res = await reviewApi.updateReview(myReview._id, reviewForm);
                 setMyReview(res.data.review);
-                Alert.alert("Thành công", "Đã cập nhật đánh giá!");
+                showModal({ type: "success", title: "Thành công", message: "Đã cập nhật đánh giá!" });
             } else {
                 // Create
                 const res = await reviewApi.createReview({ court_id: courtId, ...reviewForm });
                 setMyReview(res.data.review);
                 setCanReview(false); // only 1 review allowed
-                Alert.alert("Thành công", "Cảm ơn bạn đã đánh giá sân!");
+                showModal({ type: "success", title: "Thành công", message: "Cảm ơn bạn đã đánh giá sân!" });
             }
             // Refresh list
             const reviewsRes = await reviewApi.getCourtReviews(courtId);
             setReviews(reviewsRes.data?.reviews || []);
             setShowReviewModal(false);
         } catch (err) {
-            Alert.alert("Lỗi", err.response?.data?.error || "Có lỗi xảy ra khi gửi đánh giá");
+            showModal({ type: "error", title: "Lỗi", message: err.response?.data?.error || "Có lỗi xảy ra khi gửi đánh giá" });
         } finally {
             setIsSubmittingReview(false);
         }
@@ -200,14 +202,14 @@ export default function CourtDetailScreen() {
 
     const handleBookNow = async () => {
         if (!selectedSubCourt || selectedSlotIndices.length === 0) {
-            Alert.alert("Lỗi", "Vui lòng chọn ít nhất 1 khung giờ.");
+            showModal({ type: "warning", title: "Chưa chọn giờ", message: "Vui lòng chọn ít nhất 1 khung giờ." });
             return;
         }
 
         // Check if contiguous
         for (let i = 0; i < selectedSlotIndices.length - 1; i++) {
             if (selectedSlotIndices[i + 1] - selectedSlotIndices[i] !== 1) {
-                Alert.alert("Lỗi", "Vui lòng chọn các khung giờ liền kề nhau.");
+                showModal({ type: "warning", title: "Lỗi chọn giờ", message: "Vui lòng chọn các khung giờ liền kề nhau." });
                 return;
             }
         }
@@ -233,12 +235,15 @@ export default function CourtDetailScreen() {
             const currentMinute = now.getMinutes();
 
             if (startHour < currentHour || (startHour === currentHour && startMinute <= currentMinute)) {
-                Alert.alert("Lỗi", "Khung giờ này đã trôi qua. Vui lòng chọn khung giờ khác!");
+                showModal({ type: "warning", title: "Giờ đã qua", message: "Khung giờ này đã trôi qua. Vui lòng chọn khung giờ khác!" });
                 return;
             }
         }
 
-        const price = (sub.price_per_hour || court.price_per_hour || 0) / 2 * selectedSlotIndices.length;
+        // BE (userBookCourt) dùng court.price_per_hour làm nguồn giá duy nhất
+        // → FE phải dùng đúng court.price_per_hour để totalPrice khớp với DB
+        const pricePerHour = court.price_per_hour || 0;
+        const price = (pricePerHour / 2) * selectedSlotIndices.length;
 
         // ── Bước 1: Lock slots trước khi chuyển sang thanh toán ──
         try {
@@ -252,7 +257,7 @@ export default function CourtDetailScreen() {
             });
         } catch (err) {
             const msg = err.response?.data?.error || err.response?.data?.message || "Không thể giữ chỗ. Khung giờ có thể đã được đặt.";
-            Alert.alert("Lỗi", msg);
+            showModal({ type: "error", title: "Không thể giữ chỗ", message: msg });
             // Refresh lại slots
             bookingApi.getCourtSlots(courtId, selectedDate)
                 .then(res => setSlotsData(res.data || []))
@@ -394,7 +399,7 @@ export default function CourtDetailScreen() {
                             <Ionicons name="arrow-back" size={20} color={isDark ? "white" : "black"} />
                         </TouchableOpacity>
                         <TouchableOpacity
-                            onPress={() => Alert.alert("Yêu thích", "Đã thêm vào danh sách yêu thích!")}
+                            onPress={() => showModal({ type: "success", title: "Yêu thích", message: "Đã thêm vào danh sách yêu thích!" })}
                             className="h-10 w-10 items-center justify-center rounded-full bg-white/70 dark:bg-black/40"
                         >
                             <Ionicons name="heart-outline" size={20} color={isDark ? "white" : "black"} />
@@ -784,8 +789,8 @@ export default function CourtDetailScreen() {
                             {matchId ? 'Bạn cọc: ' : 'Giá: '}<Text className="text-sm font-bold text-emerald-600">
                                 {selectedSlotIndices.length > 0
                                     ? formatPrice(matchId
-                                        ? Math.ceil((subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length / 2)
-                                        : (subCourts.find(s => s._id === selectedSubCourt)?.price_per_hour || minPrice) / 2 * selectedSlotIndices.length)
+                                        ? Math.ceil((court.price_per_hour || 0) / 2 * selectedSlotIndices.length / 2)
+                                        : (court.price_per_hour || 0) / 2 * selectedSlotIndices.length)
                                     : formatPrice(minPrice) + "/h"}
                             </Text>
                         </Text>
@@ -820,6 +825,7 @@ export default function CourtDetailScreen() {
                     )}
                 </View>
             </View>
+            <ModalComponent />
         </View>
     );
 }

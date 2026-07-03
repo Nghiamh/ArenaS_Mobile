@@ -7,10 +7,10 @@ import {
     TextInput,
     Image,
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
 } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import authApi from "../../../api/authApi";
@@ -20,6 +20,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ── component ────────────────────────────────────────────
 export default function ForgotPasswordScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const navigation = useNavigation();
 
     const [email, setEmail] = useState("");
@@ -43,10 +44,11 @@ export default function ForgotPasswordScreen() {
             setEmailError("");
             const response = await authApi.forgotPassword({ email: trimmed });
             setIsSent(true);
-            Alert.alert(
-                "Thành công",
-                response.data?.message || "Vui lòng kiểm tra email để đặt lại mật khẩu."
-            );
+            showModal({
+                type: "success",
+                title: "Email đã được gửi!",
+                message: response.data?.message || "Vui lòng kiểm tra hộp thư để đặt lại mật khẩu. Kiểm tra thư mục Spam nếu không thấy.",
+            });
         } catch (error) {
             const msg =
                 error.response?.data?.message ||
@@ -206,6 +208,7 @@ export default function ForgotPasswordScreen() {
                     )}
                 </ScrollView>
             </KeyboardAvoidingView>
+            <ModalComponent />
         </View>
     );
 }

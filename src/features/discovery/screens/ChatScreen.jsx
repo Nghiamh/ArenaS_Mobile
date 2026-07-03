@@ -26,11 +26,13 @@ export default function ChatScreen({ navigation, route }) {
     const [inputText, setInputText] = useState("");
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
-    const [isDeleted, setIsDeleted] = useState(false);
     const [pendingDeposit, setPendingDeposit] = useState(null);
     const [isPaying, setIsPaying] = useState(false);
     const flatListRef = useRef(null);
     const socketRef = useRef(null);
+    const currentUserIdRef = useRef(currentUserId);
+    const pendingOptIds = useRef(new Set());
+    useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
 
     // ── Load chat history ────────────────────────────────
     useEffect(() => {
@@ -44,14 +46,7 @@ export default function ChatScreen({ navigation, route }) {
             setIsLoading(true);
             const res = await chatApi.getHistory(matchId);
             const data = res.data;
-
-            if (data.deleted) {
-                setIsDeleted(true);
-                setMessages([]);
-            } else {
-                setMessages(data.messages || []);
-            }
-
+            setMessages(data.messages || []);
             if (data.pending_deposit) {
                 setPendingDeposit(data.pending_deposit);
             }
@@ -68,73 +63,38 @@ export default function ChatScreen({ navigation, route }) {
     useEffect(() => {
         if (!matchId) return;
         let socket;
+        let mounted = true;
 
-        const connectSocket = async () => {
-            socket = await getSocket();
-            if (!socket) return;
+        const onReceiveMessage = (data) => {
+            if (!mounted) return;
+            setMessages((prev) => {
+                // Tin này đã có rồi (dedup)
+                if (prev.some((m) => m._id === data._id)) return prev;
 
-            socketRef.current = socket;
+                const senderId = typeof data.sender_id === 'object'
+                    ? String(data.sender_id?._id || data.sender_id?.id || '')
+                    : String(data.sender_id || '');
 
-            // Join the match room
-            socket.emit("join_match_room", { matchId });
-
-            // Re-join room sau khi socket reconnect (network hiccup)
-            socket.on("connect", () => socket.emit("join_match_room", { matchId }));
-
-            // Listen for new messages
-            socket.on("receive_message", handleReceiveMessage);
-
-            // Listen for chat deletion votes
-            socket.on("chat_vote_updated", handleChatVoteUpdated);
-
-            // Listen for opponent deposit required
-            socket.on("opponent_deposit_required", handleOpponentDeposit);
-
-            // Listen for court booked confirmation
-            socket.on("court_booked", handleCourtBooked);
-
-            // Listen for court cancellation — clear deposit banner instantly
-            socket.on("court_cancelled", handleCourtCancelled);
+                if (senderId === currentUserIdRef.current) {
+                    // Server confirm message của mình → xóa opt- của mình, thêm bản xác nhận
+                    pendingOptIds.current.clear();
+                    const filtered = prev.filter(m => !String(m._id).startsWith('opt-'));
+                    return [...filtered, data];
+                }
+                // Message của đối thủ → chỉ append, không xóa opt- của mình
+                return [...prev, data];
+            });
+            setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+            }, 80);
         };
 
-        connectSocket();
-
-        return () => {
-            if (socketRef.current) {
-                socketRef.current.emit("leave_match_room", { matchId });
-                socketRef.current.off("connect");
-                socketRef.current.off("receive_message", handleReceiveMessage);
-                socketRef.current.off("chat_vote_updated", handleChatVoteUpdated);
-                socketRef.current.off("opponent_deposit_required", handleOpponentDeposit);
-                socketRef.current.off("court_booked", handleCourtBooked);
-                socketRef.current.off("court_cancelled", handleCourtCancelled);
-            }
+        const onChatVoteUpdated = (data) => {
+            // chat_vote_updated listener removed — delete chat feature removed
         };
-    }, [matchId]);
 
-    const handleReceiveMessage = useCallback((data) => {
-        setMessages((prev) => {
-            // Nếu đã có tin nhắn này (server đã confirm) thì không thêm
-            if (prev.some((m) => m._id === data._id)) return prev;
-            // Xóa tin optimistic của user hiện tại nếu server đang confirm
-            const filtered = prev.filter(m => !String(m._id).startsWith('opt-'));
-            return [...filtered, data];
-        });
-        setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-        }, 80);
-    }, []);
-
-    const handleChatVoteUpdated = useCallback((data) => {
-        if (data.deleted) {
-            setIsDeleted(true);
-            setMessages([]);
-            Alert.alert("Thông báo", "Chat đã bị xóa bởi cả hai bên.");
-        }
-    }, []);
-
-    const handleOpponentDeposit = useCallback((data) => {
-        if (data.matchId === matchId) {
+        const onOpponentDeposit = (data) => {
+            if (!mounted || data.matchId !== matchId) return;
             setPendingDeposit({
                 bookingId: data.bookingId,
                 amount: data.opponent_amount,
@@ -145,41 +105,103 @@ export default function ChatScreen({ navigation, route }) {
                 end_time: data.end_time,
                 total_price: data.total_price,
             });
-        }
-    }, [matchId]);
+        };
 
-    const handleCourtBooked = useCallback((data) => {
-        if (data.matchId === matchId && data.status === "confirmed") {
-            // Deposit completed, clear banner
-            setPendingDeposit(null);
-        }
-    }, [matchId]);
+        const onCourtBooked = (data) => {
+            if (!mounted) return;
+            if (data.matchId === matchId && data.status === "confirmed") {
+                setPendingDeposit(null);
+            }
+        };
 
-    const handleCourtCancelled = useCallback((data) => {
-        if (data.matchId === matchId) {
-            // Court was cancelled — clear deposit banner immediately
-            setPendingDeposit(null);
-        }
+        const onCourtCancelled = (data) => {
+            if (!mounted) return;
+            if (data.matchId === matchId) setPendingDeposit(null);
+        };
+
+        const onSocketError = (err) => {
+            if (!mounted) return;
+            console.warn("[Chat] Socket error:", err?.message || err);
+            // Nếu có opt- message đang chờ xác nhận → xóa (gửi thất bại)
+            if (pendingOptIds.current.size > 0) {
+                setMessages(prev => prev.filter(m => !String(m._id).startsWith('opt-')));
+                pendingOptIds.current.clear();
+            }
+        };
+
+        const connectSocket = async () => {
+            socket = await getSocket();
+            if (!socket || !mounted) return;
+            socketRef.current = socket;
+
+            socket.emit("join_match_room", { matchId });
+            socket.on("connect", () => socket.emit("join_match_room", { matchId }));
+            socket.on("receive_message", onReceiveMessage);
+            socket.on("chat_vote_updated", onChatVoteUpdated);
+            socket.on("opponent_deposit_required", onOpponentDeposit);
+            socket.on("court_booked", onCourtBooked);
+            socket.on("court_cancelled", onCourtCancelled);
+            socket.on("error", onSocketError);
+        };
+
+        connectSocket();
+
+        return () => {
+            mounted = false;
+            if (socketRef.current) {
+                socketRef.current.emit("leave_match_room", { matchId });
+                socketRef.current.off("connect");
+                socketRef.current.off("receive_message", onReceiveMessage);
+                socketRef.current.off("opponent_deposit_required", onOpponentDeposit);
+                socketRef.current.off("court_booked", onCourtBooked);
+                socketRef.current.off("court_cancelled", onCourtCancelled);
+                socketRef.current.off("error", onSocketError);
+            }
+        };
     }, [matchId]);
 
     // ── Send message ─────────────────────────────────────
     const handleSend = useCallback(() => {
         const text = inputText.trim();
-        if (!text || !socketRef.current || isDeleted) return;
+        if (!text || !socketRef.current) return;
 
         // Optimistic update — hiện ngay cho sender, không chờ server broadcast
+        const optId = `opt-${Date.now()}`;
         const optimisticMsg = {
-            _id: `opt-${Date.now()}`,
+            _id: optId,
             sender_id: currentUserId,
             message: text,
             createdAt: new Date().toISOString(),
         };
+        pendingOptIds.current.add(optId);
         setMessages(prev => [...prev, optimisticMsg]);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
 
         socketRef.current.emit("send_message", { matchId, message: text });
         setInputText("");
-    }, [inputText, matchId, isDeleted, currentUserId]);
+
+        // Fallback: nếu sau 4s socket không confirm → gọi REST để đảm bảo lưu DB
+        setTimeout(async () => {
+            if (!pendingOptIds.current.has(optId)) return; // đã được confirm
+            try {
+                const res = await chatApi.sendMessage(matchId, text);
+                // REST thành công → replace opt- bằng message từ server
+                const confirmed = res.data?.message;
+                if (confirmed) {
+                    setMessages(prev => {
+                        if (prev.some(m => m._id === confirmed._id)) return prev;
+                        const filtered = prev.filter(m => m._id !== optId);
+                        return [...filtered, confirmed];
+                    });
+                }
+                pendingOptIds.current.delete(optId);
+            } catch {
+                // REST cũng lỗi → xóa opt- (message gửi thất bại)
+                setMessages(prev => prev.filter(m => m._id !== optId));
+                pendingOptIds.current.delete(optId);
+            }
+        }, 4000);
+    }, [inputText, matchId, currentUserId]);
 
     // ── Opponent pay 50% ─────────────────────────────────
     const handlePayDeposit = () => {
@@ -212,37 +234,7 @@ export default function ChatScreen({ navigation, route }) {
         );
     };
 
-    // ── Vote to delete chat ──────────────────────────────
-    const handleVoteDelete = () => {
-        Alert.alert(
-            "Xóa lịch sử chat",
-            "Bạn muốn xóa toàn bộ lịch sử chat? Cần cả 2 người đồng ý mới xóa được.",
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Đồng ý xóa",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            const res = await chatApi.voteDelete(matchId);
-                            if (res.data?.deleted) {
-                                setIsDeleted(true);
-                                setMessages([]);
-                            } else {
-                                Alert.alert(
-                                    "Đã ghi nhận",
-                                    `Đã bỏ phiếu. Cần thêm ${res.data?.votesRemaining} phiếu nữa để xóa.`
-                                );
-                            }
-                        } catch (err) {
-                            const msg = err.response?.data?.error || "Không thể thực hiện.";
-                            Alert.alert("Lỗi", msg);
-                        }
-                    },
-                },
-            ]
-        );
-    };
+    // ── Vote to delete chat — REMOVED ──────────────────────────────
 
     // ── Format time ──────────────────────────────────────
     const formatTime = (dateStr) => {
@@ -391,9 +383,8 @@ export default function ChatScreen({ navigation, route }) {
                     </Text>
                     <Text className="text-[10px] text-appText/40 mt-0.5">Đang hoạt động</Text>
                 </View>
-                <TouchableOpacity onPress={handleVoteDelete} className="p-2 -mr-2" disabled={isDeleted}>
-                    <Ionicons name="trash-outline" size={20} color={isDeleted ? "#CBD5E1" : "#EF4444"} />
-                </TouchableOpacity>
+                {/* Trash button removed — delete chat feature removed */}
+                <View className="w-10" />
             </View>
 
             {/* Deposit banner */}
@@ -404,18 +395,6 @@ export default function ChatScreen({ navigation, route }) {
                 <View className="flex-1 items-center justify-center">
                     <ActivityIndicator size="large" color="#059669" />
                     <Text className="text-sm text-appText/50 mt-3">Đang tải tin nhắn...</Text>
-                </View>
-            ) : isDeleted ? (
-                <View className="flex-1 items-center justify-center px-6">
-                    <View className="h-16 w-16 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mb-4">
-                        <Ionicons name="chatbubbles-outline" size={32} color="#94A3B8" />
-                    </View>
-                    <Text className="text-base font-bold text-appText/50 text-center">
-                        Chat đã bị xóa
-                    </Text>
-                    <Text className="text-sm text-appText/30 mt-2 text-center">
-                        Cả hai bên đã đồng ý xóa lịch sử chat.
-                    </Text>
                 </View>
             ) : (
                 <FlatList
@@ -446,8 +425,7 @@ export default function ChatScreen({ navigation, route }) {
             )}
 
             {/* Input bar */}
-            {!isDeleted && (
-                <View className="flex-row items-end px-3 py-3 bg-white dark:bg-appSurface border-t border-appText/5">
+            <View className="flex-row items-end px-3 py-3 bg-white dark:bg-appSurface border-t border-appText/5">
                     <TouchableOpacity
                         onPress={() => {
                             Alert.alert(
@@ -501,8 +479,7 @@ export default function ChatScreen({ navigation, route }) {
                             />
                         )}
                     </TouchableOpacity>
-                </View>
-            )}
+            </View>
         </KeyboardAvoidingView>
     );
 }

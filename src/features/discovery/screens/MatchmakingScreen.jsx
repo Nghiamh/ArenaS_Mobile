@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { View, ScrollView, Text, TouchableOpacity, Alert, ActivityIndicator, Animated, Easing, Image, Modal, TextInput } from "react-native";
+import { View, ScrollView, Text, TouchableOpacity, ActivityIndicator, Animated, Easing, Image, Modal, TextInput } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
@@ -10,8 +10,10 @@ import MiniMap from "../../../components/MiniMap";
 import ReportModal from "./ReportModal";
 import { getSocket } from "../../../utils/socket";
 import LoginRequiredScreen from "../../../components/LoginRequiredScreen";
+import { useAppModal } from "../../../components/AppModal";
 
 export default function MatchmakingScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const navigation = useNavigation();
     const route = useRoute();
     const dispatch = useDispatch();
@@ -332,15 +334,15 @@ export default function MatchmakingScreen() {
             setIsPayingDeposit(true);
             await bookingApi.opponentPayBooking(opponentDeposit.bookingId);
             setOpponentDeposit(null);
-            Alert.alert("Thành công", "Thanh toán thành công! Sân đã được đặt.");
+            showModal({ type: "success", title: "Thanh toán thành công", message: "Thanh toán thành công! Sân đã được đặt." });
             const res = await matchmakingApi.getStatus();
             if (res.data?.ticket?.match_id) dispatch(setMatchData(res.data.ticket.match_id));
         } catch (err) {
             const msg = err.response?.data?.error || err.response?.data?.message || err.message;
             if (msg.toLowerCase().includes("số dư") || msg.toLowerCase().includes("insufficient")) {
-                Alert.alert("Lỗi", "Số dư ví không đủ. Vui lòng nạp thêm tiền!");
+                showModal({ type: "error", title: "Số dư không đủ", message: "Số dư ví không đủ. Vui lòng nạp thêm tiền!" });
             } else {
-                Alert.alert("Lỗi", "Thanh toán thất bại: " + msg);
+                showModal({ type: "error", title: "Thanh toán thất bại", message: "Thanh toán thất bại: " + msg });
             }
         } finally {
             setIsPayingDeposit(false);
@@ -363,7 +365,7 @@ export default function MatchmakingScreen() {
                 dispatch(setStatus("WAITING"));
             } else {
                 console.log("Join queue error:", data || err.message);
-                Alert.alert("Lỗi", "Không thể tham gia ghép kèo: " + (data?.message || err.message));
+                showModal({ type: "error", title: "Lỗi", message: "Không thể tham gia ghép kèo: " + (data?.message || err.message) });
             }
         } finally {
             setIsLoading(false);
@@ -381,7 +383,7 @@ export default function MatchmakingScreen() {
                 }
             }
         } catch (err) {
-            Alert.alert("Lỗi", "Không thể xác nhận");
+            showModal({ type: "error", title: "Lỗi", message: "Không thể xác nhận" });
         }
     };
 
@@ -390,9 +392,9 @@ export default function MatchmakingScreen() {
         try {
             await matchmakingApi.declineMatch(matchData._id || matchData.id);
             dispatch(setStatus("IDLE"));
-            Alert.alert("Đã hủy", "Trận đấu đã bị hủy.");
+            showModal({ type: "info", title: "Đã hủy", message: "Trận đấu đã bị hủy." });
         } catch (err) {
-            Alert.alert("Lỗi", "Không thể từ chối");
+            showModal({ type: "error", title: "Lỗi", message: "Không thể từ chối" });
         }
     };
 
@@ -494,10 +496,11 @@ export default function MatchmakingScreen() {
     };
 
     const handleCompleteMatch = () => {
-        Alert.alert(
-            "Hoàn thành trận đấu",
-            "Xác nhận hoàn thành trận đấu này? Bạn sẽ được đánh giá đối thủ sau khi xác nhận.",
-            [
+        showModal({
+            type: "confirm",
+            title: "Hoàn thành trận đấu",
+            message: "Xác nhận hoàn thành trận đấu này? Bạn sẽ được đánh giá đối thủ sau khi xác nhận.",
+            buttons: [
                 { text: "Hủy", style: "cancel" },
                 {
                     text: "Xác nhận",
@@ -506,39 +509,36 @@ export default function MatchmakingScreen() {
                         try {
                             setIsLoading(true);
                             await matchmakingApi.completeMatch(matchData._id || matchData.id);
-                            
-                            // Show feedback modal instead of going to IDLE immediately
                             setCompletedMatchId(matchData._id || matchData.id);
                             setShowFeedbackModal(true);
-                            
                         } catch (err) {
-                            Alert.alert("Lỗi", err.response?.data?.error || "Không thể hoàn thành trận đấu.");
+                            showModal({ type: "error", title: "Lỗi", message: err.response?.data?.error || "Không thể hoàn thành trận đấu." });
                         } finally {
                             setIsLoading(false);
                         }
                     }
                 }
-            ]
-        );
+            ],
+        });
     };
 
     const handleSubmitFeedback = async () => {
         const { punctual, attitude, skill_as_described, play_again } = feedbackForm;
         if (punctual === null || attitude === null || skill_as_described === null || play_again === null) {
-            Alert.alert("Thiếu thông tin", "Vui lòng trả lời đủ 4 câu hỏi trước khi gửi.");
+            showModal({ type: "warning", title: "Thiếu thông tin", message: "Vui lòng trả lời đủ 4 câu hỏi trước khi gửi." });
             return;
         }
         if (!completedMatchId) return;
         try {
             setIsSubmittingFeedback(true);
             await matchmakingApi.submitFeedback(completedMatchId, { punctual, attitude, skill_as_described, play_again });
-            Alert.alert("🎉 Cảm ơn!", "Đánh giá đã được ghi nhận. Bạn nhận được +10 XP và +5 điểm!");
+            showModal({ type: "success", title: "Cảm ơn!", message: "Đánh giá đã được ghi nhận. Bạn nhận được +10 XP và +5 điểm!" });
         } catch (err) {
             const msg = err.response?.data?.message;
             if (msg === "already_feedbacked") {
-                Alert.alert("Thông báo", "Bạn đã đánh giá trận này rồi.");
+                showModal({ type: "info", title: "Thông báo", message: "Bạn đã đánh giá trận này rồi." });
             } else {
-                Alert.alert("Lỗi", "Không thể gửi đánh giá.");
+                showModal({ type: "error", title: "Lỗi", message: "Không thể gửi đánh giá." });
             }
         } finally {
             setIsSubmittingFeedback(false);
@@ -744,6 +744,7 @@ export default function MatchmakingScreen() {
     };
 
     return (
+        <>
         <ScrollView className="flex-1 bg-appBg">
             <View className="flex-row items-center justify-between px-4 pb-3 pt-12 bg-white dark:bg-appSurface border-b border-appText/5">
                 <TouchableOpacity onPress={() => navigation.goBack()} className="p-2 -ml-2">
@@ -1003,5 +1004,7 @@ export default function MatchmakingScreen() {
                 </View>
             </Modal>
         </ScrollView>
+        <ModalComponent />
+        </>
     );
 }

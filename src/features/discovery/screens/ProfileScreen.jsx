@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Modal } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Modal } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -13,6 +14,7 @@ import matchmakingApi from "../../../api/matchmakingApi";
 import React from "react";
 
 export default function ProfileScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
     const iconColor = isDark ? "#FFFFFF" : "#000000";
@@ -134,7 +136,7 @@ export default function ProfileScreen() {
         const hoursDifference = (startDateTime - now) / (1000 * 60 * 60);
 
         if (hoursDifference < 1) {
-            Alert.alert("Không thể hủy", "Bạn không thể hủy sân khi chỉ còn chưa tới 1 tiếng trước giờ đá.");
+            showModal({ type: "error", title: "Không thể hủy", message: "Bạn không thể hủy sân khi chỉ còn chưa tới 1 tiếng trước giờ đá." });
             return;
         }
 
@@ -145,28 +147,32 @@ export default function ProfileScreen() {
             message += "\nLưu ý: Bạn hủy sát giờ (dưới 3 tiếng). Bạn sẽ chỉ được hoàn 50% tiền vào ví. 50% còn lại sẽ được trả cho Chủ sân.";
         }
 
-        Alert.alert("Hủy đặt sân", message, [
-            { text: "Không", style: "cancel" },
-            {
-                text: "Xác nhận hủy",
-                style: "destructive",
-                onPress: async () => {
-                    try {
-                        setIsLoadingBookings(true);
-                        await bookingApi.cancelBooking(booking._id || booking.id);
-                        Alert.alert("Thành công", "Đã hủy sân thành công và hoàn tiền vào ví.");
-                        // Refresh data
-                        const res = await bookingApi.getMyBookings();
-                        setBookings(res.data?.bookings || res.data || []);
-                    } catch (error) {
-                        const errorMsg = error.response?.data?.error || error.response?.data?.message || "Có lỗi xảy ra khi hủy sân.";
-                        Alert.alert("Lỗi", errorMsg);
-                    } finally {
-                        setIsLoadingBookings(false);
+        showModal({
+            type: "confirm",
+            title: "Hủy đặt sân",
+            message,
+            buttons: [
+                { text: "Không", style: "cancel" },
+                {
+                    text: "Xác nhận hủy",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            setIsLoadingBookings(true);
+                            await bookingApi.cancelBooking(booking._id || booking.id);
+                            showModal({ type: "success", title: "Thành công", message: "Đã hủy sân thành công và hoàn tiền vào ví." });
+                            const res = await bookingApi.getMyBookings();
+                            setBookings(res.data?.bookings || res.data || []);
+                        } catch (error) {
+                            const errorMsg = error.response?.data?.error || error.response?.data?.message || "Có lỗi xảy ra khi hủy sân.";
+                            showModal({ type: "error", title: "Lỗi", message: errorMsg });
+                        } finally {
+                            setIsLoadingBookings(false);
+                        }
                     }
                 }
-            }
-        ]);
+            ],
+        });
     };
 
     const handleSubmitFeedback = async () => {
@@ -181,7 +187,7 @@ export default function ProfileScreen() {
             const matchId = feedbackBooking.match_id || feedbackBooking._id || feedbackBooking.id;
             await matchmakingApi.submitFeedback(matchId, data);
 
-            Alert.alert("🎉 Chúc mừng!", "Bạn nhận được 10 XP & 5 Điểm tích lũy.");
+            showModal({ type: "success", title: "Chúc mừng!", message: "Bạn nhận được 10 XP & 5 Điểm tích lũy." });
             setFeedbackModalVisible(false);
 
             // Cập nhật lại danh sách booking để ẩn nút đánh giá (giả lập)
@@ -193,17 +199,18 @@ export default function ProfileScreen() {
             // Fetch lại profile để cập nhật điểm mới
             dispatch(fetchUserProfile());
         } catch (error) {
-            Alert.alert("Lỗi", "Không thể gửi đánh giá: " + (error.response?.data?.message || error.message));
+            showModal({ type: "error", title: "Lỗi", message: "Không thể gửi đánh giá: " + (error.response?.data?.message || error.message) });
         } finally {
             setIsSubmittingFeedback(false);
         }
     };
 
     const handleLogout = async () => {
-        Alert.alert(
-            "Đăng xuất",
-            "Bạn có chắc chắn muốn đăng xuất?",
-            [
+        showModal({
+            type: "confirm",
+            title: "Đăng xuất",
+            message: "Bạn có chắc chắn muốn đăng xuất?",
+            buttons: [
                 { text: "Hủy", style: "cancel" },
                 {
                     text: "Đăng xuất",
@@ -213,11 +220,10 @@ export default function ProfileScreen() {
                         await removeItem(STORAGE_KEYS.guestMode);
                         await removeItem(STORAGE_KEYS.user);
                         dispatch(logout());
-                        // Có thể cần điều hướng về màn hình đăng nhập nếu app không tự reload
                     }
                 }
-            ]
-        );
+            ],
+        });
     };
 
     if (isGuest || !user) {
@@ -259,7 +265,7 @@ export default function ProfileScreen() {
                         <Text className="text-2xl font-bold text-emerald-600">ArenaS</Text>
                     </View>
                     <TouchableOpacity
-                        onPress={() => Alert.alert("Thông báo", "Bạn không có thông báo mới.")}
+                    onPress={() => showModal({ type: "info", title: "Thông báo", message: "Bạn không có thông báo mới." })}
                         className="h-10 w-10 items-center justify-center rounded-full bg-appSurface border border-appText/10"
                     >
                         <Ionicons name="notifications-outline" size={20} color={iconColor} />
@@ -491,7 +497,7 @@ export default function ProfileScreen() {
                 {/* Quick Actions */}
                 <View className="mt-6 flex-row gap-4">
                     <TouchableOpacity
-                        onPress={() => Alert.alert("Hỗ trợ", "Liên hệ tổng đài 1900 xxxx")}
+                        onPress={() => showModal({ type: "info", title: "Hỗ trợ", message: "Liên hệ tổng đài 1900 xxxx" })}
                         className="flex-1 items-center justify-center rounded-2xl bg-appSurface py-5 border border-appText/10 shadow-sm shadow-black/5"
                     >
                         <Ionicons name="headset-outline" size={24} color="#059669" />
@@ -683,6 +689,7 @@ export default function ProfileScreen() {
                     </View>
                 </View>
             </Modal>
+            <ModalComponent />
         </>
     );
 }

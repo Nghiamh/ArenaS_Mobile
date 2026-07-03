@@ -7,10 +7,10 @@ import {
     TextInput,
     Image,
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
 } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import authApi from "../../../api/authApi";
@@ -74,6 +74,7 @@ function validateRegisterFields({ fullName, email, phone, password, confirmPassw
 
 // ── component ────────────────────────────────────────────
 export default function RegisterScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const navigation = useNavigation();
 
     const emailRef = useRef(null);
@@ -121,16 +122,17 @@ export default function RegisterScreen() {
                 password,
             });
 
-            Alert.alert(
-                "Thành công",
-                "Đăng ký tài khoản thành công! Vui lòng đăng nhập.",
-                [{ text: "OK", onPress: () => navigation.navigate("Login") }]
-            );
+            showModal({
+                type: "success",
+                title: "Đăng ký thành công!",
+                message: `Tài khoản đã được tạo.\n\nVui lòng kiểm tra hộp thư email (${email.trim()}) để xác nhận trước khi đăng nhập.\n\nKiểm tra thư mục Spam nếu không thấy email.`,
+                buttons: [{ text: "Đến trang Đăng nhập", onPress: () => navigation.navigate("Login") }],
+            });
         } catch (error) {
             console.log("Register failed:", error.response?.status, error.response?.data?.message);
             const errorMessage =
                 error?.response?.data?.message || "Đăng ký thất bại. Vui lòng kiểm tra lại.";
-            Alert.alert("Lỗi", errorMessage);
+            showModal({ type: "error", title: "Đăng ký thất bại", message: errorMessage });
         } finally {
             setIsLoading(false);
         }
@@ -377,6 +379,7 @@ export default function RegisterScreen() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+            <ModalComponent />
         </View>
     );
 }

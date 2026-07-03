@@ -7,10 +7,10 @@ import {
     TextInput,
     Image,
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
 } from "react-native";
+import { useAppModal } from "../../../components/AppModal";
 import { useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -45,6 +45,7 @@ function validateLoginFields({ email, password }) {
 
 // ── component ────────────────────────────────────────────
 export default function LoginScreen() {
+    const { showModal, ModalComponent } = useAppModal();
     const dispatch = useDispatch();
     const navigation = useNavigation();
     const passwordRef = useRef(null);
@@ -82,7 +83,7 @@ export default function LoginScreen() {
             const errorMessage =
                 error.response?.data?.message ||
                 "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.";
-            Alert.alert("Lỗi", errorMessage);
+            showModal({ type: "error", title: "Đăng nhập thất bại", message: errorMessage });
         } finally {
             setIsLoading(false);
         }
@@ -245,6 +246,7 @@ export default function LoginScreen() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+            <ModalComponent />
         </View>
     );
 }
