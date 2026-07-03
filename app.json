@@ -2,7 +2,7 @@
   "expo": {
     "name": "ArenaS",
     "slug": "arenas-mobile",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "scheme": "arenas",
     "platforms": [
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.arenas.mobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/Img/logo.png",
         "backgroundColor": "#007F3F"
